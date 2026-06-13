@@ -13,7 +13,7 @@
   --ink:#0D2B33;--ink-soft:#2A4F5A;--ink-muted:#5A7D87;
   --border:#B8D0D8;--border-strong:#7AAAB8;
   --success-bg:#E6F4EC;--success:#1E7A45;
-  --danger:#A32020;--info-bg:#E5F0F5;
+  --danger:#A32020;--danger-bg:#FCEAEA;--info-bg:#E5F0F5;
   --amber-bg:#FFF8EC;--amber:#B8620A;
   --radius:12px;--radius-sm:8px;--radius-pill:24px;
 }
@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-e</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-f</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -1047,6 +1047,7 @@ function renderAttenteFinEtape(score, stepIdx, parcours) {
   // Recalcul des offsets depuis H, comme dans computePhaseFromSchedule
   let t = H;
   let etapeEnd = null;
+  let refTotalMs = 0; // durée de référence (marche+étape) pour une barre cohérente
   for (let k = 0; k <= stepIdx && k < parcours.length; k++) {
     const bloc = parcours[k];
     const etapeBloc = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
@@ -1058,16 +1059,17 @@ function renderAttenteFinEtape(score, stepIdx, parcours) {
     const dureeBloc = (bloc.dureeBloc || (bloc.dureeMarche||300) + (etapeBloc?.dureeEtape||300) + (epreuveBloc?.dureeRegles||120) + (epreuveBloc?.duree||600)) * 1000;
     const delai = Math.max(0, dureeBloc - dureeMarche - dureeEtape - dureeRegles - dureeEpreuve);
     t += delai + dureeMarche;
-    if (k === stepIdx) { etapeEnd = t + dureeEtape; break; }
+    if (k === stepIdx) { etapeEnd = t + dureeEtape; refTotalMs = dureeMarche + dureeEtape; break; }
     t += dureeEtape + dureeRegles + dureeEpreuve;
   }
 
   const endsAt = etapeEnd || virtualNow;
   const durLeft = Math.max(0, (endsAt - virtualNow) / 1000);
   if (durLeft > 0) {
-    // totalSecs = durée totale d'attente pour avoir une barre cohérente
-    const totalForBar = Math.max(durLeft, 1);
-    startTimerNeutral(endsAt, totalForBar, 'Épreuve dans…');
+    // Barre proportionnelle au temps total (marche+étape) + coloration orange/rouge,
+    // comme la phase étape elle-même → décompte cohérent et continu.
+    const totalForBar = (refTotalMs > 0 ? refTotalMs : (endsAt - virtualNow)) / 1000;
+    startTimer(endsAt, totalForBar, 'Épreuve dans…', 'etape_attente_'+currentTeam+'_'+stepIdx);
   } else {
     document.getElementById('timerBand').style.display='none';
   }
@@ -1559,14 +1561,18 @@ function renderEpreuvePhoto(epreuve) {
     if (envoyees.length) {
       const vignettes = envoyees.map(a => {
         const imgId = 'photo_thumb_'+a.id;
-        const lbl = a.statut==='validee' ? `✓ Validée — +${a.points||0} pts`
+        const lbl = a.statut==='validee' ? '✓ Validée'
                   : a.statut==='refusee' ? '✗ Refusée'
                   : '⏳ En attente';
-        const col = a.statut==='validee' ? 'var(--success)' : a.statut==='refusee' ? 'var(--danger)' : 'var(--amber)';
+        const ptsLbl = a.statut==='validee' ? ` +${a.points||0} pts` : '';
+        // Fond coloré selon le statut : vert=validée, rouge=refusée, gris=en attente
+        const bg  = a.statut==='validee' ? 'var(--success-bg)' : a.statut==='refusee' ? 'var(--danger-bg)' : 'var(--cream)';
+        const bdr = a.statut==='validee' ? 'var(--success)'    : a.statut==='refusee' ? 'var(--danger)'    : 'var(--border-strong)';
+        const col = a.statut==='validee' ? 'var(--success)'    : a.statut==='refusee' ? 'var(--danger)'    : 'var(--ink-muted)';
         setTimeout(() => loadPhotoThumb(a.id, imgId), 0);
-        return `<div style="flex:0 0 88px">
-          <img id="${imgId}" src="" style="width:88px;height:88px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream)">
-          <div style="font-size:10px;font-weight:500;color:${col};margin-top:3px;text-align:center">Essai ${st.attempts.indexOf(a)+1}<br>${lbl}</div>
+        return `<div style="flex:0 0 96px;background:${bg};border:2px solid ${bdr};border-radius:var(--radius-sm);padding:5px">
+          <img id="${imgId}" src="" style="width:100%;height:84px;object-fit:cover;border-radius:4px;background:rgba(0,0,0,.04)">
+          <div style="font-size:11px;font-weight:600;color:${col};margin-top:4px;text-align:center;line-height:1.3">Essai ${st.attempts.indexOf(a)+1}<br>${lbl}${ptsLbl}</div>
         </div>`;
       }).join('');
       photoHtml = `<div style="display:flex;gap:8px;overflow-x:auto;padding:0 14px 10px">${vignettes}</div>`;
