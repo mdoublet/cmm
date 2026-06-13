@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-k</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-l</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -198,7 +198,7 @@ input:focus{outline:none;border-color:var(--gold)}
     <span id="scoreBandPotentiel" style="font-size:12px;color:var(--ink-muted)"></span>
   </div>
   <!-- Barre de progression avec scores -->
-  <div id="stepRow" style="display:none;overflow-x:auto;background:var(--warm-white);border-bottom:1px solid var(--border);padding:8px 12px"></div>
+  <div id="stepRow" style="display:none;overflow-x:auto;background:var(--warm-white);border-bottom:1px solid var(--border);padding:8px 8px"></div>
   <!-- Contenu -->
   <div class="content" id="teamContent"></div>
 </div>
@@ -620,7 +620,7 @@ function renderTeamView() {
   <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:8px;overflow:hidden">
     <div style="height:4px;background:var(--gold);border-radius:2px;width:${progressPct.toFixed(1)}%;transition:width .5s"></div>
   </div>
-  <div style="display:flex;align-items:flex-end;gap:4px">`;
+  <div style="display:flex;align-items:flex-end;gap:3px">`;
 
   const phaseDone = sched.phase === 'done';
   const curRep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
@@ -664,7 +664,7 @@ function renderTeamView() {
     }
 
     progressHtml += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-      <div style="width:30px;height:30px;border-radius:4px;background:${etBg};border:2px solid ${etBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <div style="width:27px;height:27px;border-radius:4px;background:${etBg};border:2px solid ${etBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
         <span style="${etStyle}">${etVal}</span>
       </div>
       <div style="font-size:10px;font-weight:500;color:var(--ink-muted);white-space:nowrap">${maxEp}</div>
@@ -693,23 +693,23 @@ function renderTeamView() {
       }
 
       const lienFini = isPastBloc || phaseDone;
-      progressHtml += `<div style="width:6px;height:2px;background:${lienFini?'#1E3A4A':'var(--border)'}"></div>`;
+      progressHtml += `<div style="width:5px;height:2px;background:${lienFini?'#1E3A4A':'var(--border)'}"></div>`;
       progressHtml += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-        <div style="width:30px;height:30px;border-radius:4px;background:${epBg};border:2px solid ${epBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <div style="width:27px;height:27px;border-radius:4px;background:${epBg};border:2px solid ${epBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <span style="${eprStyle}">${eprVal}</span>
         </div>
         <div style="font-size:10px;font-weight:500;color:var(--ink-muted);white-space:nowrap">${maxEpr}</div>
       </div>`;
     }
-    if (i < nb-1) progressHtml += `<div style="width:6px;height:2px;background:${(isPastBloc||phaseDone)?'var(--gold)':'var(--border)'}"></div>`;
+    if (i < nb-1) progressHtml += `<div style="width:5px;height:2px;background:${(isPastBloc||phaseDone)?'var(--gold)':'var(--border)'}"></div>`;
   });
   const maxTotal = parcours.reduce((s,b)=>{
     const e2=appData.etapes.find(e=>String(e.id)===String(b.etapeId));
     const ep2=e2?.epreuveId?appData.epreuves.find(ep=>String(ep.id)===String(e2.epreuveId)):null;
     return s+10+(ep2?.max_score||10);
   },0);
-  progressHtml += `<div style="margin-left:8px;padding-left:10px;border-left:2px solid var(--gold);padding-bottom:2px">
-    <div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${totalScore}</div>
+  progressHtml += `<div style="margin-left:6px;padding-left:8px;border-left:2px solid var(--gold);padding-bottom:2px">
+    <div style="font-size:19px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${totalScore}</div>
     <div style="font-size:10px;color:var(--ink-muted);font-weight:500">/ ${maxTotal} pts</div>
   </div>`;
   progressHtml += '</div></div>';
