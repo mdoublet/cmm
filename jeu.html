@@ -1,0 +1,2140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Caroline & Marc — Jeu de Piste</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --cream:#EEF4F7;--warm-white:#F5F9FB;
+  --gold:#1E6A7A;--gold-light:#C8DFE5;--gold-dark:#134D5A;
+  --ink:#0D2B33;--ink-soft:#2A4F5A;--ink-muted:#5A7D87;
+  --border:#B8D0D8;--border-strong:#7AAAB8;
+  --success-bg:#E6F4EC;--success:#1E7A45;
+  --danger:#A32020;--info-bg:#E5F0F5;
+  --amber-bg:#FFF8EC;--amber:#B8620A;
+  --radius:12px;--radius-sm:8px;--radius-pill:24px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--cream)}
+body{font-family:'DM Sans',sans-serif;color:var(--ink);min-height:100vh;max-width:480px;margin:0 auto;padding-bottom:80px}
+
+#globalLoader{position:fixed;inset:0;background:var(--cream);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
+.loader-ring{width:40px;height:40px;border:3px solid var(--gold-light);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+#toastContainer{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:5000;display:flex;flex-direction:column;gap:8px;width:calc(100% - 32px);max-width:420px;pointer-events:none}
+.toast{background:var(--ink);color:white;border-radius:var(--radius);padding:12px 16px;font-size:13px;display:flex;gap:10px;pointer-events:all;animation:slideDown .3s ease;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+.toast.success{background:#2A5C1E}.toast.gold{background:var(--gold-dark)}
+@keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+.toast-icon{font-size:18px;flex-shrink:0}.toast-body{flex:1}
+.toast-title{font-weight:500;margin-bottom:2px}.toast-msg{font-size:12px;opacity:.85}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem 1.5rem;text-align:center;background:linear-gradient(160deg,#EEF4F7 0%,#D6EBF2 40%,#EEF4F7 100%)}
+.login-wrap::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.06;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='20'%3E%3Cpath d='M0 10 Q25 0 50 10 Q75 20 100 10' stroke='%231E6A7A' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:repeat;background-size:100px 20px}
+.monogram{width:72px;height:72px;border-radius:50%;background:var(--gold-light);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;color:var(--gold-dark);margin:0 auto 1.25rem}
+input[type=text],input[type=number]{width:100%;padding:12px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--warm-white);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:16px;-webkit-appearance:none}
+input:focus{outline:none;border-color:var(--gold)}
+.field{margin-bottom:14px;text-align:left;width:100%}
+.field-label{font-size:12px;color:var(--ink-muted);margin-bottom:5px;font-weight:500;letter-spacing:.3px;display:block}
+.err-msg{font-size:12px;color:var(--danger);margin-top:8px;text-align:center;line-height:1.5}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 20px;border-radius:var(--radius-pill);border:1px solid var(--border-strong);background:transparent;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:var(--ink);transition:background .12s,transform .1s}
+.btn:active{transform:scale(.97)}
+.btn-gold{background:var(--gold);color:white;border-color:var(--gold-dark)}
+.btn-gold:hover{background:var(--gold-dark)}
+.btn-full{width:100%}.btn-sm{padding:7px 14px;font-size:13px}
+.btn-danger{background:var(--danger);color:white;border-color:#7a1515}
+
+/* HEADER */
+.app-header{background:var(--gold-dark);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.header-left{display:flex;flex-direction:column}
+.header-team{font-size:13px;font-weight:600;color:white;letter-spacing:.3px}
+.header-player{font-size:11px;color:rgba(255,255,255,.65);margin-top:1px}
+.logout-btn{font-size:11px;color:rgba(255,255,255,.6);background:none;border:1px solid rgba(255,255,255,.25);border-radius:var(--radius-pill);cursor:pointer;padding:4px 10px;font-family:'DM Sans',sans-serif}
+
+/* TIMER BAND — gros compteur permanent */
+.timer-band{background:var(--gold);padding:12px 16px;text-align:center;position:sticky;top:46px;z-index:9}
+.timer-band-label{font-size:11px;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.timer-band-time{font-size:48px;font-weight:600;font-family:'Playfair Display',serif;color:white;line-height:1;letter-spacing:2px}
+.timer-band-time.warn{color:#FFD580}
+.timer-band-time.danger{animation:timerPulse .5s infinite alternate;color:#FF2020 !important}
+.timer-band.danger-bg{background:#7A1515}
+@keyframes timerPulse{from{opacity:1}to{opacity:.5}}
+.timer-band-bar{height:4px;background:rgba(255,255,255,.25);margin-top:8px;border-radius:2px;overflow:hidden}
+.timer-band-bar-inner{height:100%;border-radius:2px;background:white;transition:width 1s linear}
+
+/* STEP DOTS */
+.step-row{display:flex;gap:3px;align-items:center;padding:10px 16px;background:var(--warm-white);border-bottom:1px solid var(--border);overflow-x:auto}
+.sdot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;border:2px solid var(--border);color:var(--ink-muted);background:var(--cream)}
+.sdot.active{border-color:var(--gold);background:var(--gold);color:white}
+.sdot.done{border-color:var(--success);background:var(--success-bg);color:var(--success)}
+.sline{min-width:12px;height:2px;background:var(--border);border-radius:1px;flex:1}
+.sline.done{background:var(--success)}
+
+/* CONTENT */
+.content{padding:14px 16px}
+.card{background:var(--warm-white);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:12px}
+.card-title{font-size:15px;font-weight:500;margin-bottom:8px}
+.notice{background:var(--info-bg);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--gold-dark);margin-bottom:12px;line-height:1.5}
+.warn-box{background:var(--amber-bg);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:12px;line-height:1.5}
+.badge-role{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
+.badge-capitaine{background:var(--gold-light);color:var(--gold-dark)}
+.badge-membre{background:var(--cream);color:var(--ink-muted);border:1px solid var(--border)}
+.readonly-overlay{pointer-events:none;opacity:.6;user-select:none}
+
+/* WAITING */
+.waiting-screen{min-height:50vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem 1rem;text-align:center}
+.hourglass{font-size:64px;animation:hourglassTurn 3s ease-in-out infinite}
+@keyframes hourglassTurn{0%,45%{transform:rotate(0deg)}55%,100%{transform:rotate(180deg)}}
+
+/* VOTE CAPITAINE */
+.vote-card{background:var(--warm-white);border:2px solid var(--gold);border-radius:var(--radius);padding:1.25rem;margin-bottom:12px;text-align:center}
+.vote-title{font-size:18px;font-weight:500;font-family:'Playfair Display',serif;color:var(--gold-dark);margin-bottom:8px}
+.vote-btn{display:block;width:100%;padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:var(--ink);margin-bottom:8px;text-align:center;transition:all .15s}
+.vote-btn:hover{border-color:var(--gold);background:var(--gold-light);color:var(--gold-dark)}
+.vote-btn.voted{background:var(--gold);color:white;border-color:var(--gold-dark)}
+.vote-result{font-size:12px;color:var(--ink-muted);margin-top:4px}
+
+/* ENIGME */
+.enigme-card{background:var(--warm-white);border:2px solid var(--gold);border-radius:var(--radius);padding:1.25rem;margin-bottom:10px}
+.enigme-lieu{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--gold-dark);margin-bottom:10px}
+.enigme-text{font-size:16px;font-style:italic;color:var(--ink);line-height:1.85;font-family:'Playfair Display',serif}
+
+/* INDICES */
+.indice-unlocked{background:var(--warm-white);border:1px solid var(--gold-light);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:6px;animation:fadeIn .4s ease}
+.indice-locked{background:var(--cream);border:1px dashed var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.indice-locked.next{border-color:var(--border-strong);opacity:1}
+.indice-num{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gold-dark);margin-bottom:5px}
+.indice-num.last{color:var(--amber)}
+.indice-text{font-size:14px;font-style:italic;color:var(--ink-soft);line-height:1.65;font-family:'Playfair Display',serif}
+.btn-unlock{padding:6px 12px;border-radius:var(--radius-pill);border:1px solid var(--gold);background:var(--gold-light);color:var(--gold-dark);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap}
+.btn-unlock:hover{background:var(--gold);color:white}
+.btn-unlock:disabled{opacity:.35;cursor:not-allowed;background:var(--cream);border-color:var(--border)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* CODE GALET */
+.code-input{width:100%;padding:14px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--warm-white);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:28px;text-align:center;letter-spacing:10px;font-weight:600}
+.code-input:focus{outline:none;border-color:var(--gold)}
+
+/* DÉLAI */
+.delai-screen{min-height:40vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem 1rem;text-align:center;gap:16px}
+.delai-icon{font-size:56px}
+.delai-label{font-size:16px;font-weight:500;color:var(--ink)}
+.delai-sub{font-size:13px;color:var(--ink-muted);line-height:1.6}
+
+/* ÉPREUVE PHOTO */
+.photo-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:2rem;text-align:center;cursor:pointer;background:var(--cream)}
+.photo-zone:hover{border-color:var(--gold);background:var(--gold-light)}
+.photo-preview{width:100%;border-radius:var(--radius-sm);margin-top:10px}
+
+/* ÉPREUVE PETIT BAC */
+.bac-field{margin-bottom:10px}
+.bac-label{font-size:12px;font-weight:600;color:var(--ink-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.bac-input{width:100%;padding:10px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--warm-white);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:15px}
+.bac-input:focus{outline:none;border-color:var(--gold)}
+
+/* ÉPREUVE ANECDOTES */
+.anec-card{background:var(--warm-white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.anec-card:hover{border-color:var(--gold)}
+.anec-card.selected{border-color:var(--gold);background:var(--gold-light)}
+.anec-card.correct{border-color:var(--success);background:var(--success-bg)}
+.anec-card.wrong{border-color:var(--danger);background:#FFF0F0}
+.anec-text{font-size:14px;line-height:1.6;color:var(--ink)}
+
+/* DONE */
+.done-block{text-align:center;padding:2rem 1rem}
+.done-score{font-size:72px;font-weight:400;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1}
+</style>
+</head>
+<body>
+<div id="toastContainer"></div>
+<div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
+
+<!-- LOGIN -->
+<div id="loginScreen" style="display:none">
+  <div class="login-wrap">
+    <div class="monogram">
+      <svg width="34" height="34" viewBox="0 0 38 38" fill="none">
+        <circle cx="19" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
+        <line x1="19" y1="12" x2="19" y2="32" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 20 Q9 32 19 32 Q29 32 29 20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <line x1="13" y1="12" x2="25" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h1 style="font-family:'Dancing Script',cursive;font-size:30px;font-weight:600;margin-bottom:4px">Caroline &amp; Marc</h1>
+    <p style="font-size:13px;color:var(--ink-muted);margin-bottom:2rem;line-height:1.6">Jeu de piste · 5 septembre 2026<br>Villa 180° Mer · L'Houmeau</p>
+    <div class="field">
+      <label class="field-label">Ton prénom</label>
+      <input type="text" id="playerNameInput" placeholder="Ex : Sophie" autocomplete="off" autocorrect="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter') doPlayerLogin()">
+      <div style="font-size:11px;color:var(--ink-muted);margin-top:5px">Plusieurs invités avec le même prénom ? Ajoute l'initiale du nom (ex : Sophie D)</div>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="doPlayerLogin()">Entrer dans le jeu</button>
+    <div class="err-msg" id="playerLoginErr" style="display:none"></div>
+  </div>
+</div>
+
+<!-- TEAM APP -->
+<div id="teamApp" style="display:none">
+  <div class="app-header">
+    <div class="header-left">
+      <div class="header-team" id="headerTeam">Équipe —</div>
+      <div class="header-player" id="headerPlayer"></div>
+    </div>
+    <button class="logout-btn" onclick="logout()">Quitter</button>
+  </div>
+  <!-- Timer band (caché en attente) -->
+  <div id="timerBand" style="display:none" class="timer-band">
+    <div class="timer-band-label" id="timerLabel">Temps restant</div>
+    <div class="timer-band-time" id="timerTime">--:--</div>
+    <div class="timer-band-bar"><div class="timer-band-bar-inner" id="timerBar" style="width:100%"></div></div>
+  </div>
+  <!-- Points potentiels sur la phase courante -->
+  <div id="scoreBand" style="display:none;background:var(--cream);border-bottom:1px solid var(--border);padding:6px 16px;text-align:right">
+    <span id="scoreBandPotentiel" style="font-size:12px;color:var(--ink-muted)"></span>
+  </div>
+  <!-- Barre de progression avec scores -->
+  <div id="stepRow" style="display:none;overflow-x:auto;background:var(--warm-white);border-bottom:1px solid var(--border);padding:8px 12px"></div>
+  <!-- Contenu -->
+  <div class="content" id="teamContent"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ktpiwlcazmodfezrwlqf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_rcKC1bFMte1P2qW6OSdiTw_w4KoVfQl';
+const SESSION_KEY  = 'jp_player_v2';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY, { auth:{ persistSession:false, autoRefreshToken:false } });
+
+let currentTeam   = null;
+let currentPlayer = null;
+let isCaptain     = false;
+let gameState     = { status:'waiting' };
+let teamState     = null; // état jp_team_states de l'équipe courante
+let appData       = { joueurs:[], config:{}, etapes:[], epreuves:[], capitaines:{}, jdpEpreuves:{}, villesBac:{}, anecdotes:[], joueursAvecAnecdotes:[] };
+let realtimeSubs  = [];
+let timerInterval = null;
+let timerEndAt    = null;
+let timerKey      = null;
+
+// ===================== UTILS =====================
+function normalize(s) {
+  return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[-_'''\s]+/g,' ').trim();
+}
+function showToast({ icon='ℹ️', title='', msg='', type='', duration=4000 }) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `<span class="toast-icon">${icon}</span><div class="toast-body"><div class="toast-title">${title}</div>${msg?`<div class="toast-msg">${msg}</div>`:''}</div>`;
+  document.getElementById('toastContainer').appendChild(el);
+  if (duration) setTimeout(() => el.remove(), duration);
+}
+function fmtTime(secs) {
+  const s = Math.max(0, Math.floor(secs));
+  const m = Math.floor(s/60);
+  return `${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+async function safeQuery(q) { try { const r=await q; return r.data||[]; } catch(e) { return []; } }
+function saveSession() { try { localStorage.setItem(SESSION_KEY, JSON.stringify({ team:currentTeam, player:currentPlayer, ts:Date.now() })); } catch(e) {} }
+function loadSession() { try { const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null'); if(!s||Date.now()-s.ts>12*60*60*1000){localStorage.removeItem(SESSION_KEY);return null;} return s; } catch(e){return null;} }
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch(e) {} }
+
+// ===================== INIT =====================
+async function init() {
+  const [config, tsList, joueurs, epreuves, questions, villesBacData, anecdotesData] = await Promise.all([
+    safeQuery(db.from('jp_config').select('*')),
+    safeQuery(db.from('jp_team_states').select('*')),
+    safeQuery(db.from('joueurs').select('nom,equipe_nom,anecdote,commentaire')),
+    safeQuery(db.from('epreuves').select('id,title,type,instructions,scoring,max_score,duree,dureeregles')),
+    safeQuery(db.from('questions').select('id,epreuve_id,ordre,contenu').order('ordre')),
+    safeQuery(db.from('villes_bac').select('lettre,ville').order('lettre')),
+    safeQuery(db.from('anecdotes').select('*'))
+  ]);
+  try { const r=await db.from('jp_game_state').select('*').eq('id',1).maybeSingle(); if(r.data) gameState=r.data; } catch(e) {}
+
+  appData.joueurs = joueurs;
+  appData.epreuves = epreuves.map(ep => ({
+    ...ep,
+    dureeRegles: ep.dureeregles || ep.dureeRegles || 120,
+    questions: questions.filter(q => q.epreuve_id === ep.id).sort((a,b) => a.ordre - b.ordre).map(q => q.contenu)
+  }));
+  // VillesBac
+  appData.villesBac = {};
+  villesBacData.forEach(r => {
+    if (!appData.villesBac[r.lettre]) appData.villesBac[r.lettre] = [];
+    appData.villesBac[r.lettre].push(r.ville);
+  });
+  appData.anecdotes = anecdotesData;
+  appData.joueursAvecAnecdotes = joueurs.filter(j => j.anecdote?.trim());
+  config.forEach(r => {
+    appData.config[r.key] = r.value;
+    if (r.key.startsWith('jdp_capitaine_')) appData.capitaines[r.key.replace('jdp_capitaine_','')] = r.value;
+    if (r.key.startsWith('jdp_ep_duree_')) {
+      const epId = parseInt(r.key.replace('jdp_ep_duree_',''));
+      if (!appData.jdpEpreuves[epId]) appData.jdpEpreuves[epId] = {};
+      appData.jdpEpreuves[epId].duree = parseInt(r.value)||300;
+    }
+  });
+  try {
+    const etapesRow = config.find(r=>r.key==='jdp_etapes');
+    if (etapesRow) appData.etapes = JSON.parse(etapesRow.value);
+  } catch(e) {}
+
+  document.getElementById('globalLoader').style.display = 'none';
+  const sess = loadSession();
+  if (sess?.team) {
+    currentTeam=sess.team; currentPlayer=sess.player;
+    // Recharger teamState frais depuis la base
+    try {
+      const r = await db.from('jp_team_states').select('*').eq('equipe_nom', currentTeam).maybeSingle();
+      if (r.data) teamState = r.data;
+      else tsList.forEach(r => { if(r.equipe_nom === currentTeam) teamState = r; });
+    } catch(e) {
+      tsList.forEach(r => { if(r.equipe_nom === currentTeam) teamState = r; });
+    }
+    enterTeam();
+    return;
+  }
+  tsList.forEach(r => { if(r.equipe_nom === currentTeam) teamState = r; });
+  document.getElementById('loginScreen').style.display = 'block';
+}
+
+// ===================== LOGIN =====================
+async function doPlayerLogin() {
+  const raw = document.getElementById('playerNameInput').value.trim();
+  const errEl = document.getElementById('playerLoginErr');
+  errEl.style.display = 'none';
+  if (!raw) { errEl.textContent='Saisis ton prénom.'; errEl.style.display='block'; return; }
+  const normInput = normalize(raw);
+  const inputParts = normInput.split(' ');
+  const inputPrenom = inputParts[0];
+  const inputInitiale = inputParts.length > 1 ? inputParts[inputParts.length-1][0] : null;
+  const candidates = appData.joueurs.filter(j => normalize(j.nom).split(' ')[0] === inputPrenom);
+  if (!candidates.length) { errEl.textContent='Prénom introuvable.'; errEl.style.display='block'; return; }
+  if (candidates.length === 1) { connectPlayer(candidates[0], errEl); return; }
+  if (inputInitiale) {
+    const filtered = candidates.filter(j => { const p=normalize(j.nom).split(' '); return p[p.length-1]?.[0]===inputInitiale; });
+    if (filtered.length === 1) { connectPlayer(filtered[0], errEl); return; }
+    if (!filtered.length) { errEl.textContent=`Aucun "${raw}" trouvé.`; errEl.style.display='block'; return; }
+  }
+  errEl.textContent=`Plusieurs "${inputPrenom}" — ajoute l'initiale (ex: ${inputPrenom} D).`; errEl.style.display='block';
+}
+function connectPlayer(joueur, errEl) {
+  if (!joueur.equipe_nom) { errEl.textContent='Pas encore assigné à une équipe.'; errEl.style.display='block'; return; }
+  currentTeam=joueur.equipe_nom; currentPlayer=joueur.nom;
+  saveSession();
+  document.getElementById('loginScreen').style.display='none';
+  enterTeam();
+}
+function logout() {
+  clearAllTimers();
+  clearSession(); currentTeam=null; currentPlayer=null;
+  realtimeSubs.forEach(s=>{ try{s.unsubscribe();}catch(e){} }); realtimeSubs=[];
+  if (pollInterval) { clearInterval(pollInterval); pollInterval=null; }
+  stopTimer();
+  document.getElementById('teamApp').style.display='none';
+  document.getElementById('timerBand').style.display='none';
+  document.getElementById('stepRow').style.display='none';
+  document.getElementById('loginScreen').style.display='block';
+  document.getElementById('playerNameInput').value='';
+}
+
+// ===================== ENTER TEAM =====================
+// Calcule la phase et les timestamps à partir de H et du parcours
+function computePhaseFromSchedule(H, parcours) {
+  const mult = gameState?.time_multiplier || 1;
+  // En mode accéléré : le "now virtuel" avance plus vite depuis H
+  const realElapsed = Date.now() - H;
+  const virtualNow = H + realElapsed * mult;
+  const now = virtualNow;
+  let t = H;
+  for (let k = 0; k < parcours.length; k++) {
+    const bloc = parcours[k];
+    const etapeBloc    = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
+    const epreuveBloc  = etapeBloc?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(etapeBloc.epreuveId)) : null;
+    const dureeMarche  = (bloc.dureeMarche??300) * 1000;
+    const dureeEtape   = ((etapeBloc?.dureeEtape || bloc.dureeEtape || 300)) * 1000;
+    const dureeEpreuve = ((epreuveBloc?.duree || bloc.dureeEpreuve || 600)) * 1000;
+    const dureeRegles  = ((epreuveBloc?.dureeRegles || bloc.dureeRegles || 120)) * 1000;
+    const dureeBloc    = (bloc.dureeBloc || (bloc.dureeMarche||300) + (etapeBloc?.dureeEtape||300) + (epreuveBloc?.dureeRegles||120) + (epreuveBloc?.duree||600)) * 1000;
+    const delai        = Math.max(0, dureeBloc - dureeMarche - dureeEtape - dureeRegles - dureeEpreuve);
+
+    // Phase attente (calculée)
+    if (delai > 0) {
+      if (now < t + delai) return { phase:'delai', blocIdx:k, phaseStart:t, phaseEnd:t+delai };
+      t += delai;
+    }
+    // Phase marche (énigme affichée, pas d'indices)
+    if (dureeMarche > 0) {
+      if (now < t + dureeMarche) return { phase:'marche', blocIdx:k, phaseStart:t, phaseEnd:t+dureeMarche };
+      t += dureeMarche;
+    }
+    // Phase étape (indices débloqués auto)
+    if (dureeEtape > 0) {
+      if (now < t + dureeEtape) return { phase:'etape', blocIdx:k, phaseStart:t, phaseEnd:t+dureeEtape, marcheEnd:t-dureeMarche+dureeEtape, etapeStart:t };
+      t += dureeEtape;
+    }
+    // Règles
+    if (now < t + dureeRegles) return { phase:'regles', blocIdx:k, phaseStart:t, phaseEnd:t+dureeRegles };
+    t += dureeRegles;
+    // Épreuve
+    if (now < t + dureeEpreuve) return { phase:'epreuve', blocIdx:k, phaseStart:t, phaseEnd:t+dureeEpreuve };
+    t += dureeEpreuve;
+  }
+  return { phase:'done', blocIdx:parcours.length-1, phaseStart:t, phaseEnd:t };
+}
+
+function enterTeam() {
+  isCaptain = appData.capitaines[currentTeam] === currentPlayer;
+  document.getElementById('teamApp').style.display='block';
+  document.getElementById('headerTeam').textContent = 'Équipe ' + currentTeam;
+  document.getElementById('headerPlayer').textContent = currentPlayer + (isCaptain ? ' (Capitaine)' : ' (Lecture seule)');
+  renderTeamView();
+  subscribeRealtime();
+}
+
+function updateScoreBand() {
+  const band = document.getElementById('scoreBand');
+  const potEl = document.getElementById('scoreBandPotentiel');
+  if (!band || !teamState) return;
+
+  const parcours = getParcours();
+  if (!parcours.length) { band.style.display='none'; return; }
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const sched = computePhaseFromSchedule(H, parcours);
+  const phase = sched.phase;
+
+  if (phase === 'marche' || phase === 'etape') {
+    const shown = teamState.indices_shown || 0;
+    if (shown >= 6) {
+      // Mot-clé trouvé — ne pas afficher "0 pts potentiels" en rouge
+      band.style.display = 'none';
+    } else {
+      const pot = Math.max(0, 10 - shown * 2);
+      band.style.display = 'block';
+      potEl.textContent = `+${pot} pts potentiels sur cette étape`;
+      potEl.style.color = pot > 6 ? 'var(--success)' : pot > 2 ? 'var(--amber)' : 'var(--danger)';
+    }
+  } else if (phase === 'regles' || phase === 'epreuve') {
+    const bloc = parcours[sched.blocIdx];
+    const etape2 = appData.etapes.find(e=>String(e.id)===String(bloc?.etapeId));
+    const epreuve2 = etape2?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(etape2.epreuveId)) : null;
+    const pot = epreuve2?.max_score || 10;
+    band.style.display = 'block';
+    potEl.textContent = `+${pot} pts potentiels sur cette épreuve`;
+    potEl.style.color = 'var(--ink-muted)';
+  } else {
+    band.style.display = 'none';
+  }
+}
+
+// ===================== TIMER =====================
+function stopTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval=null; }
+  timerEndAt = null;
+  timerKey = null;
+}
+
+function startTimer(endsAt, totalSecs, label, key) {
+  if (key && key === timerKey) return;
+  stopTimer();
+  timerEndAt = endsAt;
+  timerKey = key || null;
+  const band = document.getElementById('timerBand');
+  const timeEl = document.getElementById('timerTime');
+  const barEl  = document.getElementById('timerBar');
+  const lblEl  = document.getElementById('timerLabel');
+  band.style.display = 'block';
+  lblEl.textContent = label;
+
+  const mult = gameState?.time_multiplier || 1;
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+
+  function tick() {
+    // Temps restant virtuel (accéléré)
+    const realElapsed = Date.now() - H;
+    const virtualNow = H + realElapsed * mult;
+    const remaining = (endsAt - virtualNow) / 1000;
+    if (remaining <= 0) {
+      timeEl.textContent = '00:00';
+      timeEl.className = 'timer-band-time danger';
+      barEl.style.width = '0%';
+      stopTimer();
+      return;
+    }
+    const pct = Math.min(100, remaining / totalSecs * 100);
+    timeEl.textContent = fmtTime(remaining);
+    timeEl.className = 'timer-band-time' + (remaining<=30?' danger':remaining<=60?' warn':'');
+    barEl.style.width = pct + '%';
+    const timerBand = document.getElementById('timerBand');
+    if (timerBand) timerBand.className = 'timer-band' + (remaining<=30?' danger-bg':'');
+  }
+  tick();
+  // En mode accéléré, rafraîchir plus vite pour que ce soit fluide
+  timerInterval = setInterval(tick, mult > 1 ? 200 : 500);
+}
+
+// ===================== RENDER =====================
+function renderTeamView() {
+  const gs = gameState;
+
+  // Jeu en attente
+  if (!gs || gs.status === 'waiting') {
+    stopTimer();
+    document.getElementById('timerBand').style.display='none';
+    document.getElementById('stepRow').style.display='none';
+    const prenom = currentPlayer?.split(' ')[0] || '';
+    const cap = appData.capitaines[currentTeam];
+    document.getElementById('teamContent').innerHTML = `
+      <div class="waiting-screen">
+        <div class="hourglass">⏳</div>
+        <div style="font-family:'Dancing Script',cursive;font-size:22px;color:var(--gold-dark);margin-top:16px">Caroline &amp; Marc</div>
+        <div style="font-size:15px;font-weight:500;color:var(--ink);margin-top:12px">Bonjour ${prenom} !</div>
+        <div style="font-size:13px;color:var(--ink-muted);margin-top:4px">Équipe <strong>${currentTeam}</strong></div>
+        ${cap
+          ? `<div style="margin-top:16px;background:var(--success-bg);border-radius:var(--radius-pill);padding:8px 18px;font-size:13px;color:var(--success)">⚓ Capitaine : <strong>${cap}</strong></div>`
+          : `<div class="warn-box" style="margin-top:16px;text-align:left">⚠️ Votre équipe n'a pas encore de capitaine. Le capitaine pourra répondre aux épreuves.</div>`
+        }
+        <div style="display:inline-flex;align-items:center;gap:8px;background:var(--amber-bg);color:var(--amber);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-top:16px">
+          ⏸ En attente du démarrage
+        </div>
+        <div style="font-size:11px;color:var(--ink-muted);margin-top:12px;opacity:.7">Connecté en tant que : ${currentPlayer||'—'}</div>
+      </div>`;
+    return;
+  }
+
+  // Jeu terminé
+  if (gs.status === 'done') {
+    stopTimer();
+    document.getElementById('timerBand').style.display='none';
+    document.getElementById('stepRow').style.display='none';
+    document.getElementById('teamContent').innerHTML = `
+      <div class="done-block">
+        <div style="font-size:48px;margin-bottom:16px">🏆</div>
+        <div class="done-score">${teamState?.total_score||0}</div>
+        <div style="font-size:14px;color:var(--ink-muted);margin-top:8px">points · jeu terminé !</div>
+      </div>`;
+    return;
+  }
+
+  // Vérifier capitaine
+  const cap = appData.capitaines[currentTeam];
+  if (!cap) { renderVoteCapitaine(); return; }
+
+  // Jeu démarré mais état équipe pas encore créé
+  if (!teamState) {
+    stopTimer();
+    document.getElementById('timerBand').style.display='none';
+    document.getElementById('stepRow').style.display='none';
+    document.getElementById('teamContent').innerHTML = `
+      <div class="waiting-screen">
+        <div class="hourglass">⏳</div>
+        <div style="font-size:13px;color:var(--ink-muted);margin-top:16px">Démarrage en cours…</div>
+      </div>`;
+    return;
+  }
+
+  // Calculer phase depuis H (schedule)
+  let parcours;
+  parcours = getParcours();
+  // Fallback : lire depuis jp_config si teamState.parcours vide
+  if (!parcours.length) {
+    try {
+      const ordreRaw = appData.config['jdp_ordre_'+currentTeam];
+      if (ordreRaw) parcours = JSON.parse(ordreRaw);
+    } catch(e) {}
+  }
+  if (!parcours.length) {
+    document.getElementById('teamContent').innerHTML=`<div class="notice">Parcours non configuré. Contactez l'organisateur.</div>`;
+    return;
+  }
+
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const sched = computePhaseFromSchedule(H, parcours);
+  const phase = sched.phase;
+  const stepIdx = sched.blocIdx;
+
+  // Barre de progression avec scores par étape/épreuve
+  document.getElementById('stepRow').style.display='block';
+  const nb = parcours.length;
+  const scoresDict = getScores();
+  // Compatibilité : si c'est encore un tableau, convertir
+  const scoresEtapes = Array.isArray(scoresDict)
+    ? scoresDict
+    : null; // on utilisera scoresDict directement
+
+  // Calculer la durée totale du jeu pour la barre de progression
+  let totalJeuMs = 0;
+  const blocOffsets = []; // offset de début de chaque bloc
+  parcours.forEach(bloc => {
+    const et2   = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
+    const ep2   = et2?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(et2.epreuveId)) : null;
+    blocOffsets.push(totalJeuMs);
+    const dMarche = (bloc.dureeMarche||300)*1000;
+    const dEtape  = (et2?.dureeEtape||bloc.dureeEtape||300)*1000;
+    const dRegles = (ep2?.dureeregles||ep2?.dureeRegles||bloc.dureeRegles||120)*1000;
+    const dEpreuve= (ep2?.duree||bloc.dureeEpreuve||600)*1000;
+    const dBloc   = Math.max(dMarche+dEtape+dRegles+dEpreuve, (bloc.dureeBloc||0)*1000);
+    totalJeuMs += dBloc;
+  });
+  const Hprog = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const multProg = gameState?.time_multiplier || 1;
+  const virtualNowProgress = Hprog + (Date.now()-Hprog)*multProg;
+  const progressPct = totalJeuMs > 0 ? Math.min(100, Math.max(0, (virtualNowProgress-Hprog)/totalJeuMs*100)) : 0;
+
+  let progressHtml = `<div style="min-width:max-content">
+  <!-- Barre de progression temporelle -->
+  <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:8px;overflow:hidden">
+    <div style="height:4px;background:var(--gold);border-radius:2px;width:${progressPct.toFixed(1)}%;transition:width .5s"></div>
+  </div>
+  <div style="display:flex;align-items:flex-end;gap:4px">`;
+
+  parcours.forEach((bloc, i) => {
+    const et3   = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
+    const ep3   = et3?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(et3.epreuveId)) : null;
+    const isPastBloc = i < stepIdx;
+    const isCurBloc  = i === stepIdx;
+    const maxEp  = 10;
+    const maxEpr = ep3?.max_score || 10;
+
+    // Scores finaux depuis le dict
+    const scoreEpFinal  = scoresDict['etape_'+i] ?? (scoresEtapes ? (scoresEtapes[i*2]??null) : null);
+    const scoreEprFinal = scoresDict['ep_'+i]    ?? (scoresEtapes ? (scoresEtapes[i*2+1]??null) : null);
+
+    // ---- CARRÉ ÉTAPE ----
+    const etapeEnCours  = isCurBloc && (sched.phase === 'marche' || sched.phase === 'etape');
+    const motcleTrouve  = isCurBloc && (teamState?.indices_shown || 0) >= 6;
+    const etapeTerminee = isPastBloc || motcleTrouve || (isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve'));
+
+    let etBg, etBdr, etVal, etStyle;
+    if (etapeTerminee && scoreEpFinal !== null) {
+      etBg = '#1E4A5A'; etBdr = '#1E4A5A';
+      etVal = scoreEpFinal;
+      etStyle = 'font-size:12px;font-weight:700;color:white';
+    } else if (etapeTerminee && isCurBloc) {
+      // Phase règles/épreuve — score étape figé
+      etBg = '#1E4A5A'; etBdr = '#1E4A5A';
+      const shownFig = teamState?.indices_shown || 0;
+      etVal = shownFig >= 6 ? 0 : Math.max(0, maxEp - shownFig * 2);
+      etStyle = 'font-size:12px;font-weight:700;color:white';
+    } else if (etapeEnCours) {
+      etBg = 'transparent'; etBdr = 'var(--border)';
+      const shownCur = teamState?.indices_shown || 0;
+      etVal = Math.max(0, maxEp - shownCur * 2);
+      etStyle = 'font-size:12px;font-weight:400;font-style:italic;color:#2A6A7A';
+    } else {
+      etBg = 'transparent'; etBdr = 'var(--border)';
+      etVal = ''; etStyle = '';
+    }
+
+    progressHtml += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+      <div style="width:30px;height:30px;border-radius:4px;background:${etBg};border:2px solid ${etBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <span style="${etStyle}">${etVal}</span>
+      </div>
+      <div style="font-size:10px;font-weight:500;color:var(--ink-muted);white-space:nowrap">${maxEp}</div>
+    </div>`;
+
+    if (ep3) {
+      // ---- CARRÉ ÉPREUVE ----
+      const eprEnCours  = isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve');
+      const eprTerminee = isPastBloc;
+
+      let epBg, epBdr, eprVal, eprStyle;
+      if (eprTerminee) {
+        epBg = '#1E3A4A'; epBdr = '#1E3A4A';
+        eprVal = scoreEprFinal ?? 0;
+        eprStyle = 'font-size:12px;font-weight:700;color:white';
+      } else if (eprEnCours) {
+        epBg = 'transparent'; epBdr = 'var(--border)';
+        const rep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+        eprVal = calcScoreEpreuve(ep3, rep);
+        eprStyle = 'font-size:12px;font-weight:400;font-style:italic;color:#2A6A7A';
+      } else {
+        epBg = 'transparent'; epBdr = 'var(--border)';
+        eprVal = ''; eprStyle = '';
+      }
+
+      progressHtml += `<div style="width:6px;height:2px;background:${isPastBloc?'#1E3A4A':'var(--border)'}"></div>`;
+      progressHtml += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="width:30px;height:30px;border-radius:4px;background:${epBg};border:2px solid ${epBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <span style="${eprStyle}">${eprVal}</span>
+        </div>
+        <div style="font-size:10px;font-weight:500;color:var(--ink-muted);white-space:nowrap">${maxEpr}</div>
+      </div>`;
+    }
+    if (i < nb-1) progressHtml += `<div style="width:6px;height:2px;background:${isPastBloc?'var(--gold)':'var(--border)'}"></div>`;
+  });
+
+  // Total : blocs strictement passés + bloc courant si status='done'
+  const etapeStat   = teamState?.etape_status   || 'pending';
+  const epreuveStat = teamState?.epreuve_status || 'pending';
+  const totalScore = Object.entries(scoresDict).reduce((acc,[k,v])=>{
+    const m = k.match(/^(etape|ep)_(\d+)$/);
+    if (!m) return acc;
+    const kind = m[1]; const idx = parseInt(m[2]);
+    if (idx < stepIdx) return acc + (v||0);
+    if (idx === stepIdx) {
+      if (kind === 'etape' && etapeStat   === 'done') return acc + (v||0);
+      if (kind === 'ep'    && epreuveStat === 'done') return acc + (v||0);
+    }
+    return acc;
+  }, 0);
+  const maxTotal = parcours.reduce((s,b)=>{
+    const e2=appData.etapes.find(e=>String(e.id)===String(b.etapeId));
+    const ep2=e2?.epreuveId?appData.epreuves.find(ep=>String(ep.id)===String(e2.epreuveId)):null;
+    return s+10+(ep2?.max_score||10);
+  },0);
+  progressHtml += `<div style="margin-left:8px;padding-left:10px;border-left:2px solid var(--gold);padding-bottom:2px">
+    <div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${totalScore}</div>
+    <div style="font-size:10px;color:var(--ink-muted);font-weight:500">/ ${maxTotal} pts</div>
+  </div>`;
+  progressHtml += '</div></div>';
+  document.getElementById('stepRow').innerHTML = progressHtml;
+
+  if (phase === 'done')    { renderDone(); return; }
+  if (phase === 'delai')   { renderDelaiSchedule(sched, parcours); return; }
+  // Dispatch basé sur etape_status / epreuve_status
+  const stepIdxBase    = teamState?.step_idx ?? -1;
+  const blocCourant    = sched.blocIdx;
+  // Statuts valides si step_idx correspond, OU si statut='done' (étape juste validée localement)
+  const rawEtape       = teamState?.etape_status  || 'pending';
+  const rawEpreuve     = teamState?.epreuve_status || 'pending';
+  const statusValide   = stepIdxBase === blocCourant;
+  const etapeStatus    = (statusValide || rawEtape === 'done')   ? rawEtape   : 'pending';
+  const epreuveStatus  = (statusValide || rawEpreuve === 'done') ? rawEpreuve : 'pending';
+
+  if (phase === 'marche' || phase === 'etape') {
+    if (etapeStatus === 'done') {
+      // Mot-clé trouvé → écran félicitations jusqu'à la fin du temps
+      const scoreActuel = teamState?.score_etape ?? 10;
+      renderAttenteFinEtape(scoreActuel, sched.blocIdx, parcours);
+      return;
+    }
+    // Marquer active si pas encore fait + nettoyer les scores futurs parasites
+    if (etapeStatus === 'pending' && isCaptain) {
+      const cleanScores = getScores();
+      let cleaned = false;
+      Object.keys(cleanScores).forEach(k => {
+        const m = k.match(/^(?:etape|ep)_(\d+)$/);
+        if (m && parseInt(m[1]) > sched.blocIdx) { delete cleanScores[k]; cleaned = true; }
+      });
+      const upd2 = {etape_status:'active'};
+      if (cleaned) upd2.scores_etapes = cleanScores;
+      db.from('jp_team_states').update(upd2).eq('equipe_nom',currentTeam).then(()=>{
+        if(teamState){ teamState.etape_status='active'; if(cleaned) teamState.scores_etapes=cleanScores; }
+      });
+      if(teamState) teamState.etape_status='active';
+    }
+    if (phase === 'marche') { renderMarcheSchedule(sched, parcours); return; }
+    if (phase === 'etape')  { renderEtapeSchedule(sched, parcours); return; }
+  }
+  if (phase === 'regles' || phase === 'epreuve') {
+    if (epreuveStatus === 'done') {
+      // Épreuve terminée → écran score
+      const scorePrev = getScores()['ep_'+sched.blocIdx] ?? 0;
+      renderAttenteFinEpreuve(scorePrev, sched.blocIdx);
+      return;
+    }
+    if (epreuveStatus === 'pending' && isCaptain) {
+      db.from('jp_team_states').update({epreuve_status:'active'}).eq('equipe_nom',currentTeam).then(()=>{
+        if(teamState) teamState.epreuve_status='active';
+      });
+      if(teamState) teamState.epreuve_status='active';
+    }
+    if (phase === 'regles')  { renderReglesSchedule(sched, parcours); return; }
+    if (phase === 'epreuve') { renderEpreuveSchedule(sched, parcours); return; }
+  }
+
+  stopTimer();
+  document.getElementById('timerBand').style.display='none';
+  document.getElementById('teamContent').innerHTML = `<div class="notice">⏸ En attente...</div>`;
+}
+
+// ---- Vote capitaine ----
+function renderVoteCapitaine() {
+  stopTimer();
+  document.getElementById('timerBand').style.display='none';
+  document.getElementById('stepRow').style.display='none';
+  const membres = appData.joueurs.filter(j=>j.equipe_nom===currentTeam);
+  const votes = (()=>{try{return JSON.parse(teamState?.votes_capitaine||'{}');}catch(e){return {};}})();
+  const myVote = votes[currentPlayer]||'';
+  document.getElementById('teamContent').innerHTML = `
+    <div class="vote-card">
+      <div class="vote-title">⚓ Élection du capitaine</div>
+      <p style="font-size:13px;color:var(--ink-muted);margin-bottom:16px;line-height:1.6">Le capitaine sera le seul à pouvoir répondre aux épreuves.<br>Votez pour un membre de votre équipe.</p>
+      ${membres.map(m=>`
+        <button class="vote-btn${myVote===m.nom?' voted':''}" onclick="voterCapitaine('${m.nom}')">
+          ${m.nom} ${myVote===m.nom?'✓':''}
+        </button>`).join('')}
+      <div class="vote-result" id="voteResult">${renderVoteResults(votes, membres.length)}</div>
+    </div>`;
+}
+
+function renderVoteResults(votes, total) {
+  const tally = {};
+  Object.values(votes).forEach(v=>{ tally[v]=(tally[v]||0)+1; });
+  const sorted = Object.entries(tally).sort((a,b)=>b[1]-a[1]);
+  if (!sorted.length) return 'Aucun vote pour le moment.';
+  return sorted.map(([nom,n])=>`${nom} : ${n}/${total} vote${n>1?'s':''}`).join(' · ');
+}
+
+async function voterCapitaine(nom) {
+  const votes = (()=>{try{return JSON.parse(teamState?.votes_capitaine||'{}');}catch(e){return {};}})();
+  votes[currentPlayer] = nom;
+  const membres = appData.joueurs.filter(j=>j.equipe_nom===currentTeam);
+  const total = membres.length;
+  // Compter les votes
+  const tally = {};
+  Object.values(votes).forEach(v=>{ tally[v]=(tally[v]||0)+1; });
+  const winner = Object.entries(tally).find(([_,n])=>n>total/2);
+
+  await db.from('jp_team_states').update({ votes_capitaine: JSON.stringify(votes) }).eq('equipe_nom', currentTeam);
+  if (winner) {
+    // Majorité atteinte → enregistrer le capitaine
+    await db.from('jp_config').upsert({key:'jdp_capitaine_'+currentTeam, value:winner[0]},{onConflict:'key'});
+    appData.capitaines[currentTeam] = winner[0];
+    isCaptain = currentPlayer === winner[0];
+    document.getElementById('headerPlayer').textContent = (isCaptain?'⚓ Capitaine · ':'')+currentPlayer;
+    showToast({icon:'⚓',title:`${winner[0]} est capitaine !`,type:'gold',duration:4000});
+  }
+  if (teamState) teamState.votes_capitaine = JSON.stringify(votes);
+  renderTeamView();
+}
+
+// ---- Délai (schedule) ----
+function renderDelaiSchedule(sched, parcours) {
+  const endsAt = sched.phaseEnd;
+  const dur = (endsAt - sched.phaseStart)/1000;
+  const key = 'delai_'+currentTeam+'_'+sched.blocIdx;
+  startTimer(endsAt, dur, 'Départ dans', key);
+  document.getElementById('teamContent').innerHTML = `
+    <div class="delai-screen">
+      <div class="delai-icon">⏸</div>
+      <div class="delai-label">Le jeu reprend bientôt</div>
+      <div class="delai-sub">Restez sur cette page — la prochaine étape démarre automatiquement.</div>
+    </div>`;
+}
+
+// ---- Marche (schedule) — énigme visible, pas d'indices ----
+function renderMarcheSchedule(sched, parcours) {
+  const stepIdx = sched.blocIdx;
+  const bloc = parcours[stepIdx];
+  const etapeId = typeof bloc==='object' ? bloc.etapeId : null;
+  const etape = appData.etapes.find(e=>e.id===etapeId) || appData.etapes[stepIdx];
+  if (!etape) { document.getElementById('teamContent').innerHTML=`<div class="notice">Étape introuvable.</div>`; return; }
+
+  const etapeId2 = typeof bloc==='object' ? String(bloc.etapeId) : null;
+  const etape2 = appData.etapes.find(e=>String(e.id)===etapeId2) || appData.etapes[stepIdx];
+  const dureeEtapeMs = ((etape2?.dureeEtape || bloc.dureeEtape || 300)) * 1000;
+  // Timer = durée totale : marche + étape
+  const dureeMarche = sched.phaseEnd - sched.phaseStart;
+  const totalEndsAt = sched.phaseEnd + dureeEtapeMs;
+  const totalDur = (dureeMarche + dureeEtapeMs) / 1000;
+  const key = 'etape_total_'+currentTeam+'_'+stepIdx;
+  startTimer(totalEndsAt, totalDur, `Étape ${stepIdx+1}`, key);
+
+  document.getElementById('teamContent').innerHTML =
+    `<div class="enigme-card" style="margin-bottom:10px">
+      <div class="enigme-text">${(etape.enigme||'').replace(/\n/g,'<br>')||'<em style="opacity:.4">—</em>'}</div>
+    </div>`
+    + (isCaptain ? `<div class="card">
+      <div class="card-title">🔑 Mot-clé trouvé ?</div>
+      <input type="text" id="motcleInput" class="code-input" placeholder="Mot-clé…" maxlength="30"
+        value="${motcleSaisi||''}"
+        oninput="motcleSaisi=this.value"
+        onkeydown="if(event.key==='Enter') validerMotcle()" style="margin-bottom:8px">
+      <button class="btn btn-gold btn-full" onclick="validerMotcle()">✓ Valider</button>
+      <div style="font-size:12px;color:var(--danger);margin-top:6px;display:none" id="motcleErr">Mot-clé incorrect.</div>
+    </div>` : `<div class="warn-box">🔒 Seul le capitaine peut soumettre le mot-clé.</div>`);
+}
+
+// ---- Étape (schedule) — indices débloqués auto après marche ----
+function renderEtapeSchedule(sched, parcours) {
+  const stepIdx = sched.blocIdx;
+  const bloc = parcours[stepIdx];
+  if (!bloc) return;
+
+  const etapeId = String(bloc.etapeId||'');
+  const etape   = appData.etapes.find(e=>String(e.id)===etapeId) || appData.etapes[stepIdx];
+  if (!etape) { document.getElementById('teamContent').innerHTML=`<div class="notice">Étape introuvable.</div>`; return; }
+
+  // Timer : même clé que la marche pour que le décompte soit continu
+  const dureeEtapeMs2 = ((etape.dureeEtape || bloc.dureeEtape || 300)) * 1000;
+  const endsAt = sched.phaseEnd;
+  const dur = (endsAt - sched.phaseStart)/1000;
+  const key = 'etape_total_'+currentTeam+'_'+stepIdx;
+  startTimer(endsAt, dur, `Étape ${stepIdx+1}`, key);
+
+  const mult = gameState?.time_multiplier || 1;
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const realElapsed = Date.now() - H;
+  const virtualNow = H + realElapsed * mult;
+  const remaining = (endsAt - virtualNow) / 1000;
+
+  // Score : 10 pts de départ, -2 par indice demandé (5 indices max)
+  const SCORE_MAX = 10;
+  const COUT_INDICE = 2;
+  const NB_INDICES = 5;
+
+  let indicesShown = teamState?.indices_shown || 0;
+  // Réinitialiser si on change d'étape — SAUF si indices_shown=6 (mot-clé trouvé)
+  if ((teamState?.step_idx ?? -1) !== stepIdx && indicesShown < 6) {
+    indicesShown = 0;
+    db.from('jp_team_states').update({indices_shown:0, score_etape:SCORE_MAX, step_idx:stepIdx})
+      .eq('equipe_nom',currentTeam).then(()=>{
+        if(teamState){teamState.indices_shown=0; teamState.score_etape=SCORE_MAX; teamState.step_idx=stepIdx;}
+      });
+  }
+  // Mot-clé déjà trouvé (indices_shown=6) → écran d'attente
+  if (indicesShown >= 6) {
+    // indices_shown=6 = mot-clé trouvé. Score = 10 - (vrais indices montrés) * 2
+    // On ne peut pas savoir combien d'indices ont été montrés avant la validation
+    // Utiliser score_etape s'il est cohérent (< 10 et >= 0)
+    const scoreActuel = (teamState?.score_etape !== undefined && teamState.score_etape >= 0 && teamState.score_etape <= 10)
+      ? teamState.score_etape
+      : 10;
+    renderAttenteFinEtape(scoreActuel, stepIdx, parcours);
+    return;
+  }
+
+  // Initialiser score_etape
+  if (teamState?.score_etape === undefined || teamState?.score_etape === null) {
+    db.from('jp_team_states').update({score_etape: SCORE_MAX}).eq('equipe_nom', currentTeam).then(()=>{});
+    if (teamState) teamState.score_etape = SCORE_MAX;
+  }
+
+  // Logique N+1 tranches : tranche 0 = attente (pas d'indice), tranche k = indice k
+  const etapeElapsed = virtualNow - sched.phaseStart;
+  const etapeDurMs = sched.phaseEnd - sched.phaseStart;
+  const trancheDurMs = etapeDurMs / (NB_INDICES + 1);
+
+  // Combien d'indices dus ? seulement si elapsed > 0 pour éviter les faux positifs
+  const trancheActuelle = etapeElapsed > 0 ? Math.floor(etapeElapsed / trancheDurMs) : 0;
+  const indicesDus = Math.min(NB_INDICES, Math.max(0, trancheActuelle));
+
+  if (indicesDus > indicesShown) {
+    const newScore = Math.max(0, SCORE_MAX - indicesDus * COUT_INDICE);
+    db.from('jp_team_states').update({indices_shown: indicesDus, score_etape: newScore}).eq('equipe_nom', currentTeam)
+      .then(() => { if (teamState) { teamState.indices_shown = indicesDus; teamState.score_etape = newScore; }});
+  }
+
+  // Planifier les prochains déblocages
+  for (let i = Math.max(indicesShown, indicesDus); i < NB_INDICES; i++) {
+    // L'indice i+1 se débloque au début de la tranche i+1
+    const triggerAt = sched.phaseStart + trancheDurMs * (i + 1);
+    const realDelayMs = Math.max(0, (triggerAt - virtualNow) / mult);
+    if (realDelayMs > 0 && realDelayMs < 3600000) {
+      scheduleTimer('indice_'+sched.blocIdx+'_'+(i+1), Date.now()+realDelayMs, async () => {
+        if (!teamState) return;
+        // Vérifier en base directement pour ne pas écrire si étape déjà terminée
+        const {data: fresh} = await db.from('jp_team_states').select('etape_status,indices_shown,step_idx').eq('equipe_nom', currentTeam).single();
+        if (!fresh) return;
+        if (fresh.etape_status === 'done' || (fresh.indices_shown||0) >= 6 || fresh.step_idx !== sched.blocIdx) {
+          // Étape terminée ou bloc changé — synchroniser local et ne rien écrire
+          if (teamState) {
+            teamState.etape_status = fresh.etape_status;
+            teamState.indices_shown = fresh.indices_shown;
+            teamState.step_idx = fresh.step_idx;
+          }
+          return;
+        }
+        const shown = fresh.indices_shown || 0;
+        const H2 = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+        const phase2 = computePhaseFromSchedule(H2, parcours);
+        if (shown <= i && phase2.phase === 'etape' && phase2.blocIdx === sched.blocIdx) {
+          const newScore = Math.max(0, SCORE_MAX - (i+1) * COUT_INDICE);
+          if(teamState){ teamState.indices_shown=i+1; teamState.score_etape=newScore; }
+          db.from('jp_team_states').update({indices_shown: i+1, score_etape: newScore}).eq('equipe_nom', currentTeam);
+          renderTeamView();
+        }
+      });
+    }
+  }
+
+  // Fin du temps → passer directement à l'épreuve (phase calculée changera automatiquement)
+  const realRemainingMs = Math.max(0, remaining * 1000 / mult);
+  if (realRemainingMs > 0) {
+    scheduleTimer('expir_etape_'+sched.blocIdx, Date.now()+realRemainingMs, () => {
+      if (!teamState) return;
+      const H2 = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+      const phase2 = computePhaseFromSchedule(H2, parcours);
+      if (phase2.phase === 'etape' && phase2.blocIdx === sched.blocIdx && teamState.etape_status !== 'done') {
+        if(teamState){teamState.indices_shown=6; teamState.score_etape=0; teamState.etape_status='done';}
+        db.from('jp_team_states').update({indices_shown:6, score_etape:0, etape_status:'done'}).eq('equipe_nom',currentTeam);
+        renderTeamView();
+      }
+    });
+  }
+
+  // Indices : textes à la suite, sans cadenas, sans numéros
+  const indicesTextes = [];
+  for (let k = 0; k < 5; k++) {
+    if (k < indicesShown) {
+      const txt = (etape.indices||[])[k]||'';
+      if (txt) indicesTextes.push(txt.replace(/\n/g,'<br>'));
+    }
+  }
+  // Mot-clé révélé si tous les indices épuisés
+  if (indicesShown >= 5) {
+    const codeTxt = (etape.indices||[])[5]||etape.code||'';
+    if (codeTxt) indicesTextes.push(`🔑 <strong>${codeTxt}</strong>`);
+  }
+  // Temps avant prochain indice
+  const trancheDurMsDisplay = (sched.phaseEnd - sched.phaseStart) / (NB_INDICES + 1);
+  const prochainK = Math.min(indicesShown, NB_INDICES - 1);
+  const nextTrigger = sched.phaseStart + trancheDurMsDisplay * (prochainK + 1);
+  const secsToNext = Math.max(0, Math.round((nextTrigger - virtualNow) / 1000));
+
+  let indicesHtml = '';
+  if (indicesTextes.length || (indicesShown < NB_INDICES && secsToNext > 0)) {
+    const prochainTxt = (indicesShown < NB_INDICES && secsToNext > 0)
+      ? `<div style="margin-top:${indicesTextes.length?'8px':'0'};padding-top:${indicesTextes.length?'8px':'0'};${indicesTextes.length?'border-top:1px dashed var(--border);':''}font-size:11px;color:var(--ink-muted)">💡 Prochain indice dans ${secsToNext}s</div>`
+      : '';
+    indicesHtml = `<div style="padding:10px 14px;background:var(--warm-white);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px">
+      ${indicesTextes.map(t=>`<p style="font-size:14px;color:var(--ink);font-style:italic;line-height:1.6;margin:0 0 4px">${t}</p>`).join('')}
+      ${prochainTxt}
+    </div>`;
+  }
+
+  const scoreActuel = teamState?.score_etape ?? SCORE_MAX;
+
+  const galetHtml = isCaptain ? `
+    <div class="card">
+      <div class="card-title">🔑 Mot-clé trouvé ?</div>
+      <p style="font-size:13px;color:var(--ink-muted);margin-bottom:10px">Entrez le mot-clé pour valider cette étape.</p>
+      <input type="text" id="motcleInput" class="code-input" placeholder="Mot-clé…" maxlength="30"
+        value="${motcleSaisi||''}"
+        oninput="motcleSaisi=this.value"
+        onkeydown="if(event.key==='Enter') validerMotcle()">
+      <button class="btn btn-gold btn-full" style="margin-top:10px" onclick="validerMotcle()">✓ Valider le mot-clé</button>
+      <div style="font-size:12px;color:var(--danger);margin-top:6px;display:none" id="motcleErr">Mot-clé incorrect.</div>
+    </div>` : `<div class="warn-box">🔒 Seul le capitaine peut entrer le mot-clé.</div>`;
+
+  document.getElementById('teamContent').innerHTML =
+    `<div class="enigme-card" style="margin-bottom:10px">
+      <div class="enigme-text">${(etape.enigme||'').replace(/\n/g,'<br>')||'<em style="opacity:.4">—</em>'}</div>
+    </div>
+    ${indicesHtml}
+    ${galetHtml}`;
+}
+
+function renderAttenteFinEpreuve(score, blocIdx) {
+  stopTimer();
+  document.getElementById('teamContent').innerHTML = `
+    <div style="text-align:center;padding:28px 20px">
+      <div style="font-size:40px;margin-bottom:10px">✅</div>
+      <div style="font-size:18px;font-weight:600;color:var(--gold-dark);margin-bottom:16px">Épreuve terminée !</div>
+      <div style="font-size:56px;font-weight:400;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${score}</div>
+      <div style="font-size:15px;color:var(--ink-muted);margin-top:4px">point${score!==1?'s':''} marqué${score!==1?'s':''}</div>
+      <div style="height:1px;background:var(--border);margin:20px 0"></div>
+      <div style="font-size:13px;color:var(--ink-muted)">En attente de la prochaine étape…</div>
+    </div>`;
+  updateScoreBand();
+}
+
+function renderAttenteFinEtape(score, stepIdx, parcours) {
+  stopTimer();
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const mult = gameState?.time_multiplier || 1;
+  const virtualNow = H + (Date.now()-H)*mult;
+
+  // Calculer la fin de la phase 'etape' du bloc stepIdx — peu importe la phase actuelle
+  // Recalcul des offsets depuis H, comme dans computePhaseFromSchedule
+  let t = H;
+  let etapeEnd = null;
+  for (let k = 0; k <= stepIdx && k < parcours.length; k++) {
+    const bloc = parcours[k];
+    const etapeBloc = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
+    const epreuveBloc = etapeBloc?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(etapeBloc.epreuveId)) : null;
+    const dureeMarche = (bloc.dureeMarche??300) * 1000;
+    const dureeEtape = ((etapeBloc?.dureeEtape || bloc.dureeEtape || 300)) * 1000;
+    const dureeEpreuve = ((epreuveBloc?.duree || bloc.dureeEpreuve || 600)) * 1000;
+    const dureeRegles = ((epreuveBloc?.dureeRegles || bloc.dureeRegles || 120)) * 1000;
+    const dureeBloc = (bloc.dureeBloc || (bloc.dureeMarche||300) + (etapeBloc?.dureeEtape||300) + (epreuveBloc?.dureeRegles||120) + (epreuveBloc?.duree||600)) * 1000;
+    const delai = Math.max(0, dureeBloc - dureeMarche - dureeEtape - dureeRegles - dureeEpreuve);
+    t += delai + dureeMarche;
+    if (k === stepIdx) { etapeEnd = t + dureeEtape; break; }
+    t += dureeEtape + dureeRegles + dureeEpreuve;
+  }
+
+  const endsAt = etapeEnd || virtualNow;
+  const durLeft = Math.max(0, (endsAt - virtualNow) / 1000);
+  if (durLeft > 0) {
+    // totalSecs = durée totale d'attente pour avoir une barre cohérente
+    const totalForBar = Math.max(durLeft, 1);
+    startTimerNeutral(endsAt, totalForBar, 'Épreuve dans…');
+  } else {
+    document.getElementById('timerBand').style.display='none';
+  }
+
+  // Récupérer le mot-clé de l'étape pour l'afficher
+  const bloc = parcours[stepIdx];
+  const etape = appData.etapes.find(e=>String(e.id)===String(bloc?.etapeId));
+  const motcle = etape?.code || '';
+
+  // teamState est déjà mis à jour avant l'appel (dans validerMotcle)
+  // S'assurer que indices_shown=6 pour que le poll ne réécrase pas
+  if (teamState && teamState.indices_shown < 6) {
+    teamState.indices_shown = 6;
+    teamState.score_etape = score;
+  }
+
+  document.getElementById('teamContent').innerHTML = `
+    <div style="text-align:center;padding:28px 20px">
+      <div style="font-size:40px;margin-bottom:10px">🎉</div>
+      <div style="font-size:18px;font-weight:600;color:var(--gold-dark);margin-bottom:6px">Mot-clé trouvé !</div>
+      ${motcle ? `<div style="font-size:14px;color:var(--ink-muted);margin-bottom:16px">Le mot-clé était <strong style="color:var(--ink)">${motcle}</strong></div>` : ''}
+      <div style="font-size:56px;font-weight:400;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${score}</div>
+      <div style="font-size:15px;color:var(--ink-muted);margin-top:4px">point${score!==1?'s':''} marqué${score!==1?'s':''}</div>
+      <div style="height:1px;background:var(--border);margin:20px 0"></div>
+      <div style="font-size:13px;color:var(--ink-muted)">En attente du démarrage de l'épreuve…</div>
+    </div>`;
+  updateScoreBand();
+}
+
+// Timer neutre : pas de rouge/orange/danger
+function startTimerNeutral(endsAt, totalSecs, label) {
+  stopTimer();
+  timerEndAt = endsAt;
+  timerKey = 'neutral_' + endsAt;
+  const band = document.getElementById('timerBand');
+  const timeEl = document.getElementById('timerTime');
+  const barEl  = document.getElementById('timerBar');
+  const lblEl  = document.getElementById('timerLabel');
+  band.style.display = 'block';
+  band.className = 'timer-band'; // jamais danger-bg
+  lblEl.textContent = label;
+  const mult = gameState?.time_multiplier || 1;
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  function tick() {
+    const remaining = (endsAt - (H + (Date.now()-H)*mult)) / 1000;
+    if (remaining <= 0) { timeEl.textContent='00:00'; barEl.style.width='0%'; stopTimer(); return; }
+    const pct = Math.min(100, remaining/totalSecs*100);
+    timeEl.textContent = fmtTime(remaining);
+    timeEl.className = 'timer-band-time'; // jamais danger/warn
+    barEl.style.width = pct + '%';
+    band.className = 'timer-band'; // reset au cas où
+  }
+  tick();
+  timerInterval = setInterval(tick, mult > 1 ? 200 : 500);
+}
+
+function calcScoreEpreuve(epreuve, rep) {
+  if (!epreuve || !rep) return 0;
+  if (epreuve.type === 'frise') {
+    return Object.keys(rep).filter(k=>!isNaN(k)&&rep[k+'_correct']===true).length;
+  } else if (epreuve.type === 'qcm') {
+    const qs = epreuve.questions||[];
+    return qs.filter((q,i)=>rep[i]===q.correct).length;
+  } else if (epreuve.type === 'villes') {
+    return Object.keys(rep).filter(k => rep[k] && !k.endsWith('_correct') && rep[k+'_correct']===true).length;
+  }
+  return 0;
+}
+
+function renderScorePhase(pts, titre, sousTitre, parcours) {
+  stopTimer();
+  // Ne pas modifier scoresEtapes ici — c'est le rôle de terminerEpreuve
+  document.getElementById('teamContent').innerHTML = `
+    <div style="text-align:center;padding:32px 20px">
+      <div style="font-size:14px;color:var(--ink-muted);margin-bottom:4px">${titre}</div>
+      ${sousTitre?`<div style="font-size:12px;color:var(--ink-muted);margin-bottom:16px">${sousTitre}</div>`:''}
+      <div style="font-size:72px;font-weight:400;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${pts}</div>
+      <div style="font-size:16px;color:var(--ink-muted);margin-top:4px">point${pts!==1?'s':''}</div>
+      <div style="height:1px;background:var(--border);margin:16px 0"></div>
+      <div style="font-size:12px;color:var(--ink-muted);margin-top:8px">La suite démarre automatiquement…</div>
+    </div>`;
+  updateScoreBand();
+  // Initialiser lastPhase pour le poll
+  if (lastPhase === null) {
+    let p = getParcours();
+    if (p.length && gameState?.started_at) {
+      const s = computePhaseFromSchedule(new Date(gameState.started_at).getTime(), p);
+      lastPhase = s.phase; lastBlocIdx = s.blocIdx;
+    }
+  }
+  setTimeout(() => renderTeamView(), 4000);
+}
+
+// Alias pour rétrocompat
+
+
+async function validerMotcle() {
+  if (!isCaptain) return;
+  const input = document.getElementById('motcleInput');
+  const errEl = document.getElementById('motcleErr');
+  if (!input) { console.warn('motcleInput introuvable'); return; }
+  if (errEl) errEl.style.display = 'none';
+  const saisi = input.value.trim();
+  if (!saisi) return;
+
+  let parcours;
+  parcours = getParcours();
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const sched = computePhaseFromSchedule(H, parcours);
+  const stepIdx = sched.blocIdx;
+  const bloc = parcours[stepIdx];
+  const etapeId = String(bloc?.etapeId||'');
+  const etape = appData.etapes.find(e=>String(e.id)===etapeId) || appData.etapes[stepIdx];
+
+  if (!etape?.code) {
+    if (errEl) { errEl.textContent='Mot-clé non configuré.'; errEl.style.display='block'; }
+    return;
+  }
+
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  if (norm(saisi) !== norm(etape.code)) {
+    if (errEl) { errEl.textContent='Mot-clé incorrect, réessayez.'; errEl.style.display='block'; }
+    return;
+  }
+
+  // ✓ Mot-clé correct
+  motcleSaisi = '';
+  // Vérifier si le temps est encore valide
+  const multV = gameState?.time_multiplier || 1;
+  const HV = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const virtualNowV = HV + (Date.now()-HV)*multV;
+  const schedV = computePhaseFromSchedule(HV, parcours);
+  const remainingV = (schedV.phaseEnd - virtualNowV) / 1000;
+  // Score = 0 si temps écoulé, sinon basé sur indices montrés
+  const shown = Math.min(5, teamState?.indices_shown || 0);
+  const scoreEtape = remainingV <= 0 ? 0 : Math.max(0, 10 - shown * 2);
+
+  // 1. Mettre à jour teamState LOCAL immédiatement
+  const scoresLocal = getScores();
+  scoresLocal['etape_'+stepIdx] = scoreEtape;
+  const totalLocal = Object.entries(scoresLocal).reduce((acc,[k,v])=>{
+    const m=k.match(/^(?:etape|ep)_(\d+)$/);
+    return (m && parseInt(m[1])<=stepIdx) ? acc+(v||0) : acc;
+  }, 0);
+  Object.assign(teamState, {
+    indices_shown: 6,
+    score_etape: scoreEtape,
+    step_idx: stepIdx,
+    etape_status: 'done',
+    scores_etapes: scoresLocal,
+    total_score: totalLocal,
+  });
+
+  // 2. Afficher l'écran de félicitations immédiatement
+  renderBloqueUntil = Date.now() + 3000;
+  renderAttenteFinEtape(scoreEtape, stepIdx, parcours);
+
+  // 3. Sauvegarder TOUT en une seule requête atomique pour éviter les race conditions
+  const scoresFinaux = {...scoresLocal};
+  scoresFinaux['etape_'+stepIdx] = scoreEtape;
+  const totalFinal = Object.entries(scoresFinaux).reduce((acc,[k,v])=>{
+    const m=k.match(/^(?:etape|ep)_(\d+)$/);
+    return (m && parseInt(m[1])<=stepIdx) ? acc+(v||0) : acc;
+  }, 0);
+  await db.from('jp_team_states').update({
+    scores_etapes: scoresFinaux,
+    total_score: totalFinal,
+    indices_shown: 6,
+    score_etape: scoreEtape,
+    step_idx: stepIdx,
+    etape_status: 'done',
+  }).eq('equipe_nom', currentTeam);
+}
+
+// ---- Règles (schedule) ----
+function renderReglesSchedule(sched, parcours) {
+  const bloc = parcours[sched.blocIdx];
+  // L'épreuve est définie sur l'étape, pas sur le bloc
+  const etapeId2 = typeof bloc==='object' ? bloc.etapeId : null;
+  const etapeAssoc = appData.etapes.find(e=>e.id===etapeId2);
+  const epreuveId = etapeAssoc?.epreuveId || (typeof bloc==='object' ? bloc.epreuveId : null);
+  const epreuve = appData.epreuves.find(e=>e.id===epreuveId);
+  const endsAt = sched.phaseEnd;
+  const dur = (endsAt - sched.phaseStart)/1000;
+  const key = 'regles_'+currentTeam+'_'+sched.blocIdx+'_'+endsAt;
+  startTimer(endsAt, dur, 'Temps pour lire les règles', key);
+  document.getElementById('teamContent').innerHTML = `
+    <div class="card">
+      <div style="font-size:16px;font-weight:500;font-family:'Playfair Display',serif;color:var(--gold-dark);margin-bottom:12px">📜 Règles de l'épreuve</div>
+      <div style="font-size:14px;color:var(--ink-soft);line-height:1.8;margin-bottom:16px">${(epreuve?.instructions||'Lisez les règles avant que le jeu commence.').replace(/\n/g,'<br>')}</div>
+      <div class="notice">Le jeu démarre automatiquement quand le timer arrive à zéro.</div>
+    </div>`;
+}
+
+// ---- Épreuve (schedule) ----
+function renderEpreuveSchedule(sched, parcours) {
+  const bloc = parcours[sched.blocIdx];
+  const etapeId2 = typeof bloc==='object' ? String(bloc.etapeId) : null;
+  const etapeAssoc = appData.etapes.find(e=>String(e.id)===etapeId2);
+  const epreuveId = etapeAssoc?.epreuveId || (typeof bloc==='object' ? bloc.epreuveId : null);
+  const epreuve = appData.epreuves.find(e=>e.id===epreuveId);
+  if (!epreuve) {
+    document.getElementById('teamContent').innerHTML=`<div class="notice">Épreuve introuvable.</div>`;
+    return;
+  }
+
+  const mult = gameState?.time_multiplier || 1;
+  const H    = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const virtualNow = H + (Date.now()-H)*mult;
+  const endsAt = sched.phaseEnd;
+  const dur    = (endsAt - sched.phaseStart) / 1000;
+  const remaining = (endsAt - virtualNow) / 1000;
+  const key = 'epreuve_'+currentTeam+'_'+sched.blocIdx+'_'+endsAt;
+  startTimer(endsAt, dur, `Épreuve : ${epreuve.title}`, key);
+
+  // Auto-terminer à expiration
+  if (remaining > 0) {
+    const realDelayMs = remaining * 1000 / mult;
+    scheduleTimer('expir_epreuve_'+sched.blocIdx, Date.now() + realDelayMs, async () => {
+      if (!teamState) return;
+      const H2 = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+      const s2 = computePhaseFromSchedule(H2, parcours);
+      if (s2.phase === 'epreuve' && s2.blocIdx === sched.blocIdx && teamState.epreuve_status !== 'done') {
+        const rep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+        const pts = calcScoreEpreuve(epreuve, rep);
+        teamState.epreuve_status = 'done';
+        await terminerEpreuve(pts);
+      }
+    });
+  } else {
+    // Déjà expiré
+    const rep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+    terminerEpreuve(calcScoreEpreuve(epreuve, rep));
+    return;
+  }
+
+  const roleTag = '';
+  const readonlyNotice = !isCaptain ? `<div class="warn-box" style="margin-bottom:12px">👁 Seul le capitaine joue.</div>` : '';
+
+  let epHtml = '';
+  if (epreuve.type === 'photos') epHtml = renderEpreuvePhoto(epreuve);
+  else if (epreuve.type === 'villes') epHtml = renderEpreuvePetitBac(epreuve);
+  else if (epreuve.type === 'qcm') epHtml = renderEpreuveQCM(epreuve);
+  else if (epreuve.type === 'frise') epHtml = renderEpreuveFrise(epreuve);
+  else epHtml = `<div class="card"><p style="font-size:14px">${epreuve.instructions||epreuve.title}</p></div>`;
+
+  // Bouton "Voir les règles" repliable — sauf si on est encore dans la phase règles de la frise
+  const friseEnRegles = epreuve.type === 'frise' && (()=>{
+    try { const r = JSON.parse(teamState.reponse_epreuve||'{}'); return !r._regles_lues; }
+    catch(e) { return false; }
+  })();
+  const reglesHtml = (epreuve.instructions && !friseEnRegles) ? `<details style="margin-bottom:10px;background:var(--cream);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px">
+    <summary style="cursor:pointer;font-size:13px;font-weight:500;color:var(--gold-dark)">📜 Voir les règles</summary>
+    <div style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin-top:8px">${epreuve.instructions.replace(/\n/g,'<br>')}</div>
+  </details>` : '';
+
+  document.getElementById('teamContent').innerHTML = roleTag + readonlyNotice + reglesHtml + epHtml;
+
+  if (!isCaptain) {
+    document.querySelectorAll('#teamContent button, #teamContent input, #teamContent textarea, #teamContent select').forEach(el => {
+      el.disabled = true; el.style.pointerEvents = 'none';
+    });
+  }
+}
+
+// ---- Épreuve ----
+let pbState = null; // état local Petit Bac
+const PB_DURATION_EP = 10;
+
+
+// ---- Épreuve Photos ----
+// Points par essai (doit correspondre à POINTS_BY_ATTEMPT côté admin)
+const POINTS_PHOTO = [10, 8, 6, 4, 2];
+
+// Cache des photos déjà chargées (id → data url)
+const photoThumbCache = new Map();
+async function loadPhotoThumb(photoId, imgElId) {
+  if (!photoId) return;
+  let dataUrl = photoThumbCache.get(photoId);
+  if (!dataUrl) {
+    const {data} = await db.from('photos').select('data').eq('id', photoId).single();
+    if (data?.data) {
+      dataUrl = data.data;
+      photoThumbCache.set(photoId, dataUrl);
+    }
+  }
+  const el = document.getElementById(imgElId);
+  if (el && dataUrl) el.src = dataUrl;
+}
+
+let _lastSyncPhotos = 0;
+async function syncPhotosFromDB(epreuve) {
+  if (!isCaptain) return;
+  // Throttle : ne pas appeler plus d'une fois par 2 secondes (le Realtime gère la fraîcheur)
+  const now = Date.now();
+  if (now - _lastSyncPhotos < 2000) return;
+  _lastSyncPhotos = now;
+  // Métadonnées uniquement — la data (base64) n'est PAS stockée dans reponse_epreuve
+  const {data: photos} = await db.from('photos')
+    .select('id,challenge_num,attempt_num,statut,points')
+    .eq('equipe_nom', currentTeam)
+    .eq('epreuve_id', epreuve.id)
+    .order('challenge_num', {ascending:true})
+    .order('attempt_num', {ascending:true});
+
+  // Reconstruire le state COMPLET depuis la table photos (source de vérité)
+  const state = {
+    ch1: {attempts:[], done:false, points:0},
+    ch2: {attempts:[], done:false, points:0},
+  };
+
+  (photos || []).forEach(p => {
+    const st = p.challenge_num === 1 ? state.ch1 : state.ch2;
+    const idx = (p.attempt_num || 1) - 1;
+    st.attempts[idx] = {
+      id: p.id,
+      statut: p.statut || 'en_attente',
+      points: p.points || 0,
+    };
+  });
+
+  // Calculer done/points pour chaque challenge
+  [state.ch1, state.ch2].forEach(st => {
+    const validated = st.attempts.find(a => a && a.statut === 'validee');
+    if (validated) {
+      st.done = true;
+      st.points = validated.points || 0;
+    } else if (st.attempts.length >= 5 && st.attempts.every(a => a && a.statut === 'refusee')) {
+      // 5 essais tous refusés → terminé, 0 pt
+      st.done = true;
+      st.points = 0;
+    }
+  });
+
+  // Normaliser l'ancien state pour comparaison fiable (purger data résiduels)
+  const oldRaw = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+  const oldState = {
+    ch1: {attempts: [], done: !!oldRaw.ch1?.done, points: oldRaw.ch1?.points||0},
+    ch2: {attempts: [], done: !!oldRaw.ch2?.done, points: oldRaw.ch2?.points||0},
+  };
+  ['ch1','ch2'].forEach(k => {
+    (oldRaw[k]?.attempts || []).forEach((a, i) => {
+      if (a) oldState[k].attempts[i] = {
+        id: a.id,
+        statut: a.statut || 'en_attente',
+        points: a.points || 0,
+      };
+    });
+  });
+  const oldStr = JSON.stringify(oldState);
+  const newStr = JSON.stringify(state);
+
+  if (oldStr !== newStr) {
+    if (oldState.ch1?.done && !state.ch1.done) state.ch1.done = true;
+    if (oldState.ch2?.done && !state.ch2.done) state.ch2.done = true;
+    teamState.reponse_epreuve = JSON.stringify(state);
+    // Sauvegarder uniquement le score (pas reponse_epreuve)
+    const total = (state.ch1.points||0) + (state.ch2.points||0);
+    const currentScore = (getScores()['ep_'+ (teamState.step_idx||0)] || 0);
+    if (total !== currentScore) {
+      await saveScore('ep_'+ (teamState.step_idx||0), total);
+    }
+    // Re-render uniquement si le state local a vraiment besoin d'être actualisé
+    // Pas d'appel direct à renderTeamView pour éviter les boucles
+    // Le prochain poll ou Realtime déclenchera le render naturellement
+  }
+}
+
+function renderEpreuvePhoto(epreuve) {
+  const state = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+  // state: { ch1: {attempts:[], done:false, points:0}, ch2: ... }
+  if (!state.ch1) state.ch1 = {attempts:[], done:false, points:0};
+  if (!state.ch2) state.ch2 = {attempts:[], done:false, points:0};
+  const MAX_AT = 5;
+
+  // Synchroniser avec la table photos (statuts mis à jour par l'admin)
+  syncPhotosFromDB(epreuve);
+
+  // Timing : 5 minutes par challenge
+  // Challenge 1 = première moitié du temps, Challenge 2 = seconde moitié
+  // Sauf si challenge 1 validé → challenge 2 disponible immédiatement après
+  const parcoursP = getParcours();
+  const Hp = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const multP = gameState?.time_multiplier || 1;
+  const schedP = computePhaseFromSchedule(Hp, parcoursP);
+  const virtualNowP = Hp + (Date.now()-Hp)*multP;
+  const epDur = schedP.phaseEnd - schedP.phaseStart;
+  const halfDur = epDur / 2;
+  const elapsedInEp = virtualNowP - schedP.phaseStart;
+
+  // Quand challenge 1 doit-il se terminer ?
+  // - Soit photo validée → done immédiat
+  // - Soit 5 essais refusés → done à 0 pts
+  // - Soit fin de la première moitié du temps → done à 0 pts si pas de photo validée
+  const ch1TimeUp = elapsedInEp >= halfDur;
+  if (ch1TimeUp && !state.ch1.done && isCaptain) {
+    // Forcer ch1.done si temps écoulé
+    state.ch1.done = true;
+    if (!state.ch1.attempts.find(a=>a.statut==='validee')) state.ch1.points = 0;
+    db.from('jp_team_states').update({reponse_epreuve: JSON.stringify(state)}).eq('equipe_nom', currentTeam);
+    teamState.reponse_epreuve = JSON.stringify(state);
+  }
+  // Ch2 disponible : ch1.done OU ch1 a une photo validée
+  const ch1Validated = state.ch1.attempts.find(a=>a.statut==='validee');
+  const ch2Available = state.ch1.done || ch1Validated;
+
+  // Planifier l'auto-fin ch1 si pas encore done
+  if (!state.ch1.done && !ch1TimeUp && isCaptain) {
+    const timeUntilHalf = (schedP.phaseStart + halfDur - virtualNowP);
+    const realDelayMs = Math.max(0, timeUntilHalf / multP);
+    scheduleTimer('photo_ch1_end_'+schedP.blocIdx, Date.now()+realDelayMs, () => renderTeamView());
+  }
+  // Planifier l'auto-fin ch2 à la fin du temps total
+  if (!state.ch2.done && isCaptain) {
+    const timeUntilEnd = (schedP.phaseEnd - virtualNowP);
+    const realDelayMs = Math.max(0, timeUntilEnd / multP);
+    scheduleTimer('photo_ch2_end_'+schedP.blocIdx, Date.now()+realDelayMs, () => renderTeamView());
+  }
+
+  function challengeBlock(num, st, person, locked) {
+    const used = st.attempts.length;
+    const validated = st.attempts.find(a=>a.statut==='validee');
+    const pending = st.attempts.find(a=>a.statut==='en_attente');
+    const last = st.attempts[st.attempts.length-1];
+    const canSubmit = isCaptain && !st.done && !pending && used < MAX_AT && !locked;
+
+    let dots = '';
+    for(let i=0;i<MAX_AT;i++){
+      const a=st.attempts[i];
+      let cls = a ? (a.statut==='validee'?'attempt-dot success':a.statut==='en_attente'?'attempt-dot current':'attempt-dot used') : (i===used&&!st.done?'attempt-dot current':'attempt-dot inactive');
+      dots += `<div class="${cls}">${i+1}</div>`;
+    }
+
+    let statusHtml = '';
+    if(pending) statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--amber)">⏳ Photo en attente de validation...</div>`;
+    else if(validated) statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--success)">✓ Réussi à l'essai ${st.attempts.indexOf(validated)+1} — +${validated.points||0} pts</div>`;
+    else if(st.done) statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--danger)">✗ ${used>=MAX_AT?'5 essais épuisés':'Temps écoulé'} — 0 point</div>`;
+    else if(last?.statut==='refusee') statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--danger)">Photo refusée — essai ${used+1} disponible (max ${POINTS_PHOTO[used]||0} pts)</div>`;
+
+    let photoHtml = '';
+    if(last && last.statut!=='en_attente' && last.id) {
+      // Charger la photo à la demande via son ID (image lazy)
+      const imgId = 'photo_thumb_'+last.id;
+      photoHtml = `<div style="padding:0 14px 10px">
+        <img id="${imgId}" src="" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);min-height:60px">
+        <div style="font-size:12px;font-weight:500;color:${last.statut==='validee'?'var(--success)':'var(--danger)'};margin-top:4px">${last.statut==='validee'?`✓ Validée — +${last.points||0} pts`:'✗ Refusée'}</div>
+      </div>`;
+      // Charger après render
+      setTimeout(() => loadPhotoThumb(last.id, imgId), 0);
+    }
+
+    const pts = st.done ? (st.points>0?`+${st.points} pts`:'0 pt') : `max ${POINTS_PHOTO[used]||0} pts`;
+
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:500">Challenge ${num} — ${person}</div>
+        <span style="font-size:13px;font-weight:600;color:var(--gold-dark)">${pts}</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">${dots}</div>
+      ${statusHtml}${photoHtml}
+      ${canSubmit ? `<div style="padding:0 14px 12px">
+        <label style="display:block;cursor:pointer">
+          <div class="photo-zone">📷 Soumettre l'essai ${used+1} (${POINTS_PHOTO[used]||0} pts si validée)</div>
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="soumettrePhoto(${num}, this)">
+        </label>
+      </div>` : ''}
+    </div>`;
+  }
+
+  const total = (state.ch1.points||0) + (state.ch2.points||0);
+  // Ch2 affiché uniquement quand ch1 terminé
+  return `
+    <div class="card" style="margin-bottom:10px">
+      <div style="font-size:14px;color:var(--ink-soft);line-height:1.7">${epreuve.instructions||''}</div>
+    </div>
+    ${challengeBlock(1, state.ch1, 'Caroline', false)}
+    ${ch2Available ? challengeBlock(2, state.ch2, 'Marc', false) : `<div class="card" style="margin-bottom:10px;opacity:.6"><div style="font-size:14px;font-weight:500;margin-bottom:6px">Challenge 2 — Marc</div><div style="font-size:13px;color:var(--ink-muted)">🔒 Disponible après le challenge Caroline</div></div>`}
+    <div class="card" style="text-align:center">
+      <div style="font-size:12px;color:var(--ink-muted);margin-bottom:4px">Score total</div>
+      <div style="font-size:36px;font-weight:400;font-family:'Playfair Display',serif;color:var(--gold-dark)">${total} <span style="font-size:16px;color:var(--ink-muted)">/ 20 pts</span></div>
+    </div>`;
+}
+
+async function soumettrePhoto(chNum, input) {
+  if (!isCaptain || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const state = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+    if (!state.ch1) state.ch1 = {attempts:[], done:false, points:0};
+    if (!state.ch2) state.ch2 = {attempts:[], done:false, points:0};
+    const st = chNum===1 ? state.ch1 : state.ch2;
+    if (st.done || st.attempts.length >= 5) return;
+
+    // 1. INSERT dans photos (avec data base64) — table dédiée, donc pas de bloat sur jp_team_states
+    const {data: inserted, error} = await db.from('photos').insert({
+      equipe_nom: currentTeam,
+      epreuve_id: appData.epreuves.find(ep=>ep.type==='photos')?.id||1,
+      data: e.target.result,
+      statut: 'en_attente',
+      points: 0,
+      challenge_num: chNum,
+      attempt_num: st.attempts.length + 1
+    }).select('id').single();
+
+    if (error) {
+      alert('Erreur lors de l\'envoi de la photo : ' + error.message);
+      return;
+    }
+
+    // 2. UPDATE jp_team_states avec uniquement les métadonnées (PAS la data base64)
+    st.attempts.push({id: inserted?.id, statut:'en_attente', points:0});
+    await db.from('jp_team_states').update({reponse_epreuve: JSON.stringify(state)}).eq('equipe_nom', currentTeam);
+    Object.assign(teamState, {reponse_epreuve: JSON.stringify(state)});
+    renderTeamView();
+  };
+  reader.readAsDataURL(input.files[0]);
+  input.value = '';
+}
+
+// ---- Épreuve Petit Bac ----
+function renderEpreuvePetitBac(epreuve) {
+  const reponses = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+  // Toutes les lettres qui ont des villes configurées
+  const lettres = Object.keys(appData.villesBac||{}).filter(l=>(appData.villesBac[l]||[]).length>0).sort();
+  if (!lettres.length) return `<div class="notice">Aucune ville configurée pour cette épreuve.</div>`;
+
+  let score = 0;
+  const rows = lettres.map(l => {
+    const valeur = (reponses[l]||'').trim();
+    const villes = (appData.villesBac[l]||[]).map(v=>v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+    const normalise = valeur.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const correct = valeur.length > 0 && villes.includes(normalise);
+    const wrong   = valeur.length > 0 && !correct;
+    if (correct) score++;
+
+    const bgColor  = correct ? 'var(--success-bg)' : wrong ? '#FFF0F0' : 'var(--warm-white)';
+    const bdrColor = correct ? 'var(--success)' : wrong ? 'var(--danger)' : 'var(--border)';
+    const icon     = correct ? '✅' : wrong ? '❌' : '';
+
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);color:white;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0">${l}</div>
+      <input type="text" value="${valeur.replace(/"/g,'&quot;')}"
+        placeholder="Ville en ${l}…"
+        ${!isCaptain ? 'readonly' : ''}
+        onchange="pbSaisir('${l}', this.value)"
+        style="flex:1;padding:7px 10px;border-radius:var(--radius-sm);border:1.5px solid ${bdrColor};background:${bgColor};color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px;${!isCaptain?'cursor:default;':''}">
+      <div style="width:24px;text-align:center;font-size:16px">${icon}</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:500">${epreuve.title}</div>
+      <div style="font-size:20px;font-weight:500;font-family:'Playfair Display',serif;color:var(--gold-dark)">${score}<span style="font-size:12px;color:var(--ink-muted);font-weight:400"> / ${lettres.length}</span></div>
+    </div>
+    ${!isCaptain?'<div class="warn-box" style="margin-bottom:10px">👁 Seul le capitaine peut répondre.</div>':''}
+    <div>${rows}</div>
+  </div>`;
+}
+
+async function pbSaisir(lettre, valeur) {
+  if (!isCaptain) return;
+  const reponses = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+  reponses[lettre] = valeur.trim();
+  // Marquer si correct
+  const villes = (appData.villesBac[lettre]||[]).map(v=>v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''));
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  reponses[lettre+'_correct'] = villes.includes(norm(valeur.trim()));
+  // Calculer et sauvegarder ep_N immédiatement
+  const parcoursPb = getParcours();
+  const Hpb = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const schedPb = computePhaseFromSchedule(Hpb, parcoursPb);
+  const blocPb = parcoursPb[schedPb.blocIdx];
+  const etapePb = appData.etapes?.find(e=>String(e.id)===String(blocPb?.etapeId));
+  const epreuvePb = etapePb?.epreuveId ? appData.epreuves?.find(ep=>String(ep.id)===String(etapePb.epreuveId)) : null;
+  if (epreuvePb) saveScore('ep_'+schedPb.blocIdx, calcScoreEpreuve(epreuvePb, reponses));
+  await db.from('jp_team_states').update({reponse_epreuve: JSON.stringify(reponses)}).eq('equipe_nom', currentTeam);
+  Object.assign(teamState, {reponse_epreuve: JSON.stringify(reponses)});
+  renderTeamView();
+}
+
+// ---- Épreuve QCM (Anecdotes Mariés) ----
+function renderEpreuveQCM(epreuve) {
+  const qIdx = teamState.question_idx || 0;
+  const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+  const questions = epreuve.questions || [];
+  if (!questions.length) return `<div class="card"><p style="font-size:14px">${epreuve.instructions||'Pas de questions configurées.'}</p></div>`;
+  if (qIdx >= questions.length) return `<div class="card" style="text-align:center"><div style="font-size:28px;margin-bottom:8px">✅</div><div style="font-size:15px;font-weight:500">Toutes les questions répondues !</div></div>`;
+  const q = questions[qIdx];
+  const opts = q.opts || q.options || [];
+  const alreadyAnswered = reponses[qIdx] !== undefined;
+  return `<div class="card">
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">Question ${qIdx+1} / ${questions.length}</div>
+    <div style="font-size:15px;font-weight:500;margin-bottom:16px;line-height:1.5">${q.q||q.question||''}</div>
+    ${opts.map((opt,i)=>`
+      <div class="anec-card${alreadyAnswered ? (i===(q.correct||0)?' correct':(reponses[qIdx]===i?' wrong':'')) : ''}"
+        onclick="${isCaptain&&!alreadyAnswered?`repQCM(${i})`:''}">
+        <div class="anec-text">${opt}</div>
+      </div>`).join('')}
+    ${alreadyAnswered&&isCaptain?`<button class="btn btn-gold btn-full" style="margin-top:12px" onclick="qcmSuivant()">Question suivante →</button>`:''}
+  </div>`;
+}
+
+async function repQCM(optIdx) {
+  if (!isCaptain) return;
+  const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+  const qIdx = teamState.question_idx||0;
+  reponses[qIdx] = optIdx;
+  await db.from('jp_team_states').update({reponse_epreuve:JSON.stringify(reponses)}).eq('equipe_nom',currentTeam);
+  Object.assign(teamState, {reponse_epreuve:JSON.stringify(reponses)});
+  renderTeamView();
+}
+async function qcmSuivant() {
+  if (!isCaptain) return;
+  const qIdx = (teamState.question_idx||0) + 1;
+  await db.from('jp_team_states').update({question_idx:qIdx}).eq('equipe_nom',currentTeam);
+  Object.assign(teamState, {question_idx:qIdx});
+  renderTeamView();
+}
+
+// ---- Épreuve Frise (Anecdotes Invités) ----
+function renderEpreuveFrise(epreuve) {
+  const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+  const qIdx = teamState.question_idx||0;
+
+  // Plus de phase règles interne — le schedule global gère déjà les règles
+  // Marquer _regles_lues=true pour la cohérence avec le code historique
+  if (!reponses._regles_lues && isCaptain) {
+    reponses._regles_lues = true;
+    db.from('jp_team_states').update({reponse_epreuve: JSON.stringify(reponses)}).eq('equipe_nom', currentTeam);
+    if (teamState) teamState.reponse_epreuve = JSON.stringify(reponses);
+  }
+
+  // Anecdotes uniquement de l'équipe courante, ordre aléatoire fixe (seed = step_idx)
+  const tousJoueurs = appData.joueursAvecAnecdotes.filter(j => j.equipe_nom === currentTeam);
+  // Ordre pseudo-aléatoire reproductible basé sur l'équipe (pas de re-shuffle au poll)
+  const seed = currentTeam.split('').reduce((a,c)=>a+c.charCodeAt(0),0);
+  const joueurs = [...tousJoueurs].sort((a,b) => {
+    const ha = (seed * a.nom.charCodeAt(0) * 2654435761) % 1000;
+    const hb = (seed * b.nom.charCodeAt(0) * 2654435761) % 1000;
+    return ha - hb;
+  });
+  if (!joueurs.length) return '<div class="card"><p style="font-size:14px">Pas d’anecdotes configurées.</p></div>';
+
+  const ptsTotal = Object.keys(reponses).filter(k=>!isNaN(k)&&reponses[k+'_correct']===true).length;
+
+  if (qIdx >= joueurs.length) {
+    return `<div class="card" style="text-align:center">
+      <div style="font-size:40px;margin-bottom:12px">🎉</div>
+      <div style="font-size:18px;font-weight:500;margin-bottom:6px">Épreuve terminée !</div>
+      <div style="font-size:36px;font-weight:400;font-family:'Playfair Display',serif;color:var(--gold-dark)">${ptsTotal}</div>
+      <div style="font-size:14px;color:var(--ink-muted)">point${ptsTotal!==1?'s':''} sur ${joueurs.length}</div>
+    </div>`;
+  }
+
+  const j = joueurs[qIdx];
+  const answered = reponses[qIdx] !== undefined;
+  const correct = reponses[qIdx+'_correct'];
+  const choices = appData.joueurs.filter(jj=>jj.equipe_nom===currentTeam).sort((a,b)=>a.nom.localeCompare(b.nom));
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:12px;color:var(--ink-muted)">Anecdote ${qIdx+1} / ${joueurs.length}</span>
+      <span style="font-size:13px;font-weight:600;color:var(--gold-dark)">${ptsTotal} pt${ptsTotal!==1?'s':''}</span>
+    </div>
+    <div style="font-size:16px;font-style:italic;color:var(--ink);line-height:1.7;font-family:'Playfair Display',serif;padding:14px;background:var(--cream);border-radius:var(--radius-sm);border-left:3px solid var(--gold);margin-bottom:18px">"${j.anecdote}"</div>
+    ${answered ? `
+      <div style="padding:12px;border-radius:var(--radius-sm);background:${correct?'var(--success-bg)':'#FFF0F0'};border:1px solid ${correct?'var(--success)':'var(--danger)'};margin-bottom:12px;text-align:center">
+        <div style="font-size:14px;font-weight:600;color:${correct?'var(--success)':'var(--danger)'};margin-bottom:6px">${correct?'✅ Bonne réponse !':'❌ Mauvaise réponse'}</div>
+        <div style="font-size:15px;color:var(--ink)">C’était : <strong>${j.nom}</strong></div>
+        ${j.commentaire?`<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">💬 ${j.commentaire}</div>`:''}
+      </div>
+      ${isCaptain?'<button class="btn btn-gold btn-full" onclick="friseSuivant()">Anecdote suivante →</button>':'<div style="font-size:13px;color:var(--ink-muted);text-align:center">En attente du capitaine...</div>'}
+    ` : `
+      <div style="font-size:13px;font-weight:500;color:var(--ink-muted);margin-bottom:10px">À qui correspond cette anecdote ?</div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:12px">
+        ${choices.map(c=>`<button onclick="${isCaptain?`friseRepondre('${c.nom.replace(/'/g,"\'")}')`:'return'}"
+          style="padding:11px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--warm-white);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px;text-align:left;cursor:${isCaptain?'pointer':'default'}"
+          ${!isCaptain?'disabled':''}>
+          ${c.nom} <span style="font-size:11px;color:var(--ink-muted)">(${c.equipe_nom})</span>
+        </button>`).join('')}
+      </div>
+      ${!isCaptain?'<div class="warn-box">👁 Seul le capitaine peut répondre.</div>':''}
+    `}
+  </div>`;
+}
+
+async function friseDemarrer() {
+  if (!isCaptain) return;
+  const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+  reponses._regles_lues = true;
+  await db.from('jp_team_states').update({reponse_epreuve:JSON.stringify(reponses)}).eq('equipe_nom',currentTeam);
+  Object.assign(teamState, {reponse_epreuve:JSON.stringify(reponses)});
+  renderTeamView();
+}
+
+async function friseRepondre(nomChoisi) {
+  if (!isCaptain) return;
+  const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
+  const qIdx = teamState.question_idx||0;
+  // Reconstruire le même ordre que l'affichage
+  const tousJoueurs = appData.joueursAvecAnecdotes.filter(j=>j.equipe_nom===currentTeam);
+  const seed = currentTeam.split('').reduce((a,c)=>a+c.charCodeAt(0),0);
+  const joueursTries = [...tousJoueurs].sort((a,b)=>{
+    const ha=(seed*a.nom.charCodeAt(0)*2654435761)%1000;
+    const hb=(seed*b.nom.charCodeAt(0)*2654435761)%1000;
+    return ha-hb;
+  });
+  const j = joueursTries[qIdx];
+  if (!j) return;
+  const correct = nomChoisi === j.nom;
+  reponses[qIdx] = nomChoisi;
+  reponses[qIdx+'_correct'] = correct;
+  // Sauvegarder ep_N immédiatement
+  const parcoursF = getParcours();
+  const Hf = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const schedF = computePhaseFromSchedule(Hf, parcoursF);
+  const blocF = parcoursF[schedF.blocIdx];
+  const etapeF = appData.etapes?.find(e=>String(e.id)===String(blocF?.etapeId));
+  const epreuveF = etapeF?.epreuveId ? appData.epreuves?.find(ep=>String(ep.id)===String(etapeF.epreuveId)) : null;
+  if (epreuveF) saveScore('ep_'+schedF.blocIdx, calcScoreEpreuve(epreuveF, reponses));
+  await db.from('jp_team_states').update({reponse_epreuve:JSON.stringify(reponses)}).eq('equipe_nom',currentTeam);
+  Object.assign(teamState, {reponse_epreuve:JSON.stringify(reponses)});
+  renderTeamView();
+}
+
+async function friseSuivant() {
+  if (!isCaptain) return;
+  const qIdx = (teamState.question_idx||0) + 1;
+  await db.from('jp_team_states').update({question_idx:qIdx}).eq('equipe_nom',currentTeam);
+  Object.assign(teamState, {question_idx:qIdx});
+  renderTeamView();
+}
+
+
+
+
+
+async function terminerEpreuve(scoreEpreuve, forceStepIdx) {
+  pbState = null;
+  const parcours = getParcours();
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const sched = computePhaseFromSchedule(H, parcours);
+  // Utiliser forceStepIdx si fourni (appelé depuis le poll avec prevBlocIdx)
+  const stepIdx = forceStepIdx !== undefined ? forceStepIdx : sched.blocIdx;
+  const isLast  = stepIdx >= parcours.length - 1;
+
+  // Sauvegarder dans le dict nommé (jsonb)
+  const scoresDict = getScores();
+  // Ne pas écraser un score étape existant
+  if (scoresDict['etape_'+stepIdx] === undefined) {
+    scoresDict['etape_'+stepIdx] = teamState?.score_etape ?? 0;
+  }
+  // Ne pas écraser ep_N si déjà sauvegardé (ex: sauvegardé en continu pendant l'épreuve)
+  if (scoresDict['ep_'+stepIdx] === undefined || (scoreEpreuve ?? 0) > (scoresDict['ep_'+stepIdx] || 0)) {
+    scoresDict['ep_'+stepIdx] = scoreEpreuve ?? 0;
+  }
+  // Calculer le total uniquement sur les blocs joués (≤ stepIdx)
+  const totalNew = Object.entries(scoresDict).reduce((acc, [k, v]) => {
+    const m = k.match(/^(?:etape|ep)_(\d+)$/);
+    if (m && parseInt(m[1]) <= stepIdx) return acc + (v||0);
+    return acc;
+  }, 0);
+
+  const upd = {
+    scores_etapes: scoresDict,
+    total_score: totalNew,
+    step_idx: isLast ? stepIdx : stepIdx + 1,
+    score_etape: 10,
+    indices_shown: 0,
+    reponse_epreuve: '{}',
+    question_idx: 0,
+    epreuve_status: isLast ? 'done' : 'pending',
+    etape_status: 'pending',
+  };
+  await db.from('jp_team_states').update(upd).eq('equipe_nom', currentTeam);
+  Object.assign(teamState, {...upd, total_score: totalNew});
+  stopTimer();
+  renderTeamView();
+}
+
+// ---- Done ----
+function renderDone() {
+  stopTimer();
+  document.getElementById('timerBand').style.display='none';
+  document.getElementById('teamContent').innerHTML = `
+    <div class="done-block">
+      <div style="font-size:48px;margin-bottom:16px">🎉</div>
+      <div class="done-score">${teamState?.total_score||0}</div>
+      <div style="font-size:14px;color:var(--ink-muted);margin-top:8px">points · toutes étapes terminées !</div>
+    </div>`;
+}
+
+// ===================== POLLING + REALTIME =====================
+let pollInterval = null;
+let lastPhase = null;
+let lastBlocIdx = null;
+let motcleSaisi = ''; // préserver la saisie entre les renders
+let renderBloqueUntil = 0; // timestamp ms — bloquer les re-renders du poll jusqu'à ce moment
+
+// Registre des setTimeout actifs pour éviter les doublons
+// Clé = type+blocIdx+detail, valeur = {id, endsAt}
+const activeTimers = new Map();
+function scheduleTimer(key, fireAt, fn) {
+  const existing = activeTimers.get(key);
+  if (existing && Math.abs(existing.endsAt - fireAt) < 500) return; // déjà planifié à ~même moment
+  if (existing) clearTimeout(existing.id);
+  const delay = Math.max(0, fireAt - Date.now());
+  if (delay > 3600000) return; // > 1h : ignorer
+  const id = setTimeout(() => {
+    activeTimers.delete(key);
+    fn();
+  }, delay);
+  activeTimers.set(key, {id, endsAt: fireAt});
+}
+function clearAllTimers() {
+  activeTimers.forEach(t => clearTimeout(t.id));
+  activeTimers.clear();
+}
+
+// Helpers scores_etapes (jsonb dict)
+function getParcours() {
+  try { return JSON.parse(teamState?.parcours||'[]'); } catch(e) { return []; }
+}
+
+function getScores() {
+  const raw = teamState?.scores_etapes;
+  if (!raw) return {};
+  if (Array.isArray(raw)) return {}; // ancienne structure tableau → ignorer
+  if (typeof raw === 'object') return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return {};
+    return parsed;
+  } catch(e) { return {}; }
+}
+async function saveScore(key, val) {
+  const scores = getScores();
+  scores[key] = val;
+  // Calculer total uniquement sur les blocs joués
+  const parcoursSS = getParcours();
+  const Hss = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const schedSS = parcoursSS.length ? computePhaseFromSchedule(Hss, parcoursSS) : {blocIdx:0};
+  const curBloc = schedSS.blocIdx;
+  const total = Object.entries(scores).reduce((acc, [k, v]) => {
+    const m = k.match(/^(?:etape|ep)_(\d+)$/);
+    if (m && parseInt(m[1]) <= curBloc) return acc + (v||0);
+    return acc;
+  }, 0);
+  await db.from('jp_team_states')
+    .update({scores_etapes: scores, total_score: total})
+    .eq('equipe_nom', currentTeam);
+  if (teamState) {
+    teamState.scores_etapes = scores;
+    teamState.total_score = total;
+  }
+  return {scores, total};
+}
+
+function cleanupChannels() {
+  try {
+    if (typeof db.removeAllChannels === 'function') db.removeAllChannels();
+    if (db.realtime?.channels) {
+      [...db.realtime.channels].forEach(ch => {
+        try { db.removeChannel(ch); } catch(e) {
+          try { ch.unsubscribe(); } catch(e2) {}
+        }
+      });
+    }
+  } catch(e) { console.warn('cleanup:', e); }
+}
+
+window.addEventListener('beforeunload', () => { try { cleanupChannels(); clearAllTimers(); } catch(e) {} });
+
+function subscribeRealtime() {
+  cleanupChannels();
+  // Realtime (best effort)
+  try {
+    const ts = Date.now();
+    const s1 = db.channel('jp-team-'+currentTeam+'-'+ts)
+      .on('postgres_changes',{event:'*',schema:'public',table:'jp_team_states',filter:`equipe_nom=eq.${currentTeam}`}, p=>{
+        if (!p.new) return;
+        // Protection : ne pas écraser si etape_status='done' local mais pas encore en base
+        const localDone   = teamState?.etape_status   === 'done' && p.new.etape_status   !== 'done';
+        const localEpDone = teamState?.epreuve_status === 'done' && p.new.epreuve_status !== 'done';
+        const localShown  = (teamState?.indices_shown||0) >= 6 && (p.new.indices_shown||0) < 6;
+        if (localDone || localEpDone || localShown) {
+          // Fusionner uniquement les champs sûrs (pas les statuts ni indices_shown)
+          const safe = {...p.new};
+          if (localDone)   { safe.etape_status   = teamState.etape_status;   safe.score_etape = teamState.score_etape; }
+          if (localEpDone) { safe.epreuve_status = teamState.epreuve_status; }
+          if (localShown)  { safe.indices_shown  = teamState.indices_shown;  }
+          // Fusionner les scores : prendre le max
+          const localScores = getScores();
+          const newScores = typeof p.new.scores_etapes === 'object' ? p.new.scores_etapes : {};
+          const merged = {...newScores};
+          Object.keys(localScores).forEach(k => {
+            if ((localScores[k]||0) > (merged[k]||0)) merged[k] = localScores[k];
+          });
+          safe.scores_etapes = merged;
+          teamState = safe;
+        } else {
+          teamState = p.new;
+        }
+        isCaptain = appData.capitaines[currentTeam] === currentPlayer;
+        renderTeamView();
+      }).subscribe();
+    const s2 = db.channel('jp-game-'+ts)
+      .on('postgres_changes',{event:'*',schema:'public',table:'jp_game_state'}, p=>{
+        if (p.new) { gameState=p.new; renderTeamView(); }
+      }).subscribe();
+    // Subscription photos (validation par admin)
+    const sPhotos = db.channel('jp-photos-'+currentTeam+'-'+ts)
+      .on('postgres_changes',{event:'*',schema:'public',table:'photos',filter:`equipe_nom=eq.${currentTeam}`}, p=>{
+        // Forcer le sync (bypasser le throttle) car c'est un vrai changement
+        _lastSyncPhotos = 0;
+        renderTeamView();
+      }).subscribe();
+    const s3 = db.channel('jp-config-'+ts)
+      .on('postgres_changes',{event:'*',schema:'public',table:'jp_config'}, p=>{
+        if (!p.new) return;
+        appData.config[p.new.key]=p.new.value;
+        if (p.new.key.startsWith('jdp_capitaine_')) {
+          appData.capitaines[p.new.key.replace('jdp_capitaine_','')]=p.new.value;
+          isCaptain=appData.capitaines[currentTeam]===currentPlayer;
+          document.getElementById('headerPlayer').textContent=(isCaptain?'⚓ Capitaine · ':'')+currentPlayer;
+          renderTeamView();
+        }
+      }).subscribe();
+    realtimeSubs.push(s1,s2,s3);
+  } catch(e) { console.warn('Realtime non disponible, polling uniquement'); }
+
+  // Polling — plus fréquent en mode accéléré
+  const mult = gameState?.time_multiplier || 1;
+  const pollDelay = Math.max(500, Math.round(3000 / mult));
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    try {
+      const [gsRes, tsRes, capRes] = await Promise.all([
+        db.from('jp_game_state').select('id,status,started_at,time_multiplier').eq('id',1).maybeSingle(),
+        db.from('jp_team_states').select('*').eq('equipe_nom',currentTeam).maybeSingle(),
+        db.from('jp_config').select('key,value').like('key','jdp_capitaine_%')
+      ]);
+      let changed = false;
+
+      if (gsRes.data && gsRes.data.status !== gameState?.status) {
+        gameState = gsRes.data; changed = true;
+      }
+
+      if (tsRes.data) {
+        // Ne JAMAIS écraser teamState si le flag motcleTrouve est actif
+        // ou si indices_shown local >= 6 et la base n'est pas encore à jour
+        const localShown = teamState?.indices_shown || 0;
+        const baseShown  = tsRes.data.indices_shown || 0;
+        // Protéger si mot-clé validé localement OU etape_status='done' local pas encore en base
+        const localDone = teamState?.etape_status === 'done' && tsRes.data.etape_status !== 'done';
+        const protege   = (localShown >= 6 && baseShown < 6) || localDone;
+
+        if (!protege) {
+          const prevShown   = teamState?.indices_shown;
+          const prevReponse = teamState?.reponse_epreuve;
+          const prevQIdx    = teamState?.question_idx;
+          const prevVotes   = teamState?.votes_capitaine;
+
+          // Fusionner : garder les scores locaux si plus récents
+          const localScores = getScores();
+          const rawBase = tsRes.data.scores_etapes;
+          const baseScores = !rawBase ? {} : typeof rawBase === 'object' ? rawBase : (()=>{try{return JSON.parse(rawBase);}catch(e){return {};}})();
+          // Prendre la valeur max pour chaque clé (évite de régresser)
+          const mergedScores = {...baseScores};
+          Object.keys(localScores).forEach(k => {
+            if ((localScores[k]||0) > (mergedScores[k]||0)) mergedScores[k] = localScores[k];
+          });
+          const mergedTotal = Object.values(mergedScores).reduce((a,b)=>a+(b||0),0);
+
+          teamState = {
+            ...tsRes.data,
+            scores_etapes: JSON.stringify(mergedScores),
+            total_score: mergedTotal,
+          };
+
+          if (baseShown !== prevShown || prevReponse !== tsRes.data.reponse_epreuve ||
+              prevQIdx !== tsRes.data.question_idx || prevVotes !== tsRes.data.votes_capitaine ||
+              tsRes.data.etape_status !== teamState?.etape_status ||
+              tsRes.data.epreuve_status !== teamState?.epreuve_status) {
+            changed = true;
+          }
+        }
+
+        // Vérifier changement de phase calculée
+        let p2; try{p2=(()=>{try{return JSON.parse(tsRes.data?.parcours||'[]');}catch(e){return [];}})();}catch(e){p2=[];}
+        if (p2.length && gameState?.started_at) {
+          const s2 = computePhaseFromSchedule(new Date(gameState.started_at).getTime(), p2);
+          if (s2.phase !== lastPhase || s2.blocIdx !== lastBlocIdx) {
+            const prevPhase   = lastPhase;
+            const prevBlocIdx = lastBlocIdx;
+
+            // Transition : fin d'épreuve (changement de bloc)
+            // Seulement si prevBlocIdx correspond vraiment au bloc en cours en base
+            const stepIdxBase = teamState?.step_idx ?? 0;
+            if (prevBlocIdx !== null && s2.blocIdx !== prevBlocIdx && teamState?.epreuve_status !== 'done'
+                && stepIdxBase === prevBlocIdx && isCaptain) {
+              const p3 = getParcours();
+              const b3 = p3[prevBlocIdx];
+              const et3 = appData.etapes?.find(e=>String(e.id)===String(b3?.etapeId));
+              const ep3 = et3?.epreuveId ? appData.epreuves?.find(ep=>String(ep.id)===String(et3.epreuveId)) : null;
+              if (ep3) {
+                const rep3 = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+                const pts3 = calcScoreEpreuve(ep3, rep3);
+                if (teamState) teamState.epreuve_status = 'done';
+                lastPhase = s2.phase; lastBlocIdx = s2.blocIdx;
+                terminerEpreuve(pts3, prevBlocIdx);
+                return;
+              }
+            }
+
+            // Transition : fin d'étape sans mot-clé
+            if (prevBlocIdx !== null && s2.blocIdx !== prevBlocIdx && teamState?.etape_status !== 'done'
+                && stepIdxBase === prevBlocIdx && isCaptain) {
+              const existingScore = getScores()['etape_'+prevBlocIdx];
+              if (existingScore === undefined || existingScore === null) {
+                const shownNow = Math.min(5, teamState?.indices_shown || 0);
+                const scoreNow = Math.max(0, 10 - shownNow * 2);
+                saveScore('etape_'+prevBlocIdx, scoreNow);
+                db.from('jp_team_states').update({etape_status:'done', score_etape:scoreNow}).eq('equipe_nom',currentTeam);
+              } else {
+                db.from('jp_team_states').update({etape_status:'done'}).eq('equipe_nom',currentTeam);
+              }
+              if (teamState) teamState.etape_status = 'done';
+            }
+
+            lastPhase = s2.phase; lastBlocIdx = s2.blocIdx;
+            renderBloqueUntil = 0; // relâcher immédiatement sur changement de phase
+            changed = true;
+          }
+        }
+      }
+
+      (capRes.data||[]).forEach(r => {
+        const team = r.key.replace('jdp_capitaine_','');
+        if (appData.capitaines[team] !== r.value) { appData.capitaines[team] = r.value; changed = true; }
+      });
+
+      if (changed) {
+        isCaptain = appData.capitaines[currentTeam] === currentPlayer;
+        document.getElementById('headerPlayer').textContent = (isCaptain?'⚓ Capitaine · ':'')+currentPlayer;
+        // Re-render sauf si période de blocage post-validation
+        if (Date.now() < renderBloqueUntil) {
+          updateScoreBand();
+        } else {
+          // Préserver le contenu du motcleInput si focus dessus
+          const focused = document.activeElement;
+          const motcleVal = focused?.id === 'motcleInput' ? focused.value : null;
+          renderTeamView();
+          // Restaurer le focus et la valeur si nécessaire
+          if (motcleVal !== null) {
+            const el = document.getElementById('motcleInput');
+            if (el && el.value !== motcleVal) {
+              el.value = motcleVal;
+              el.focus();
+            }
+          }
+        }
+      }
+    } catch(e) { console.warn('Poll error:', e); }
+  }, pollDelay);
+}
+
+init();
+</script>
+</body>
+</html>
