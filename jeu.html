@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-i</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-j</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -1901,9 +1901,11 @@ async function terminerEpreuve(scoreEpreuve, forceStepIdx) {
 
   // Sauvegarder dans le dict nommé (jsonb)
   const scoresDict = getScores();
-  // Ne pas écraser un score étape existant
+  // Score d'étape : seul validerMotcle (mot-clé trouvé) l'enregistre. S'il est absent
+  // ici, c'est que le mot-clé n'a PAS été trouvé → 0 pt (et surtout pas score_etape,
+  // qui a été remis à 10 pour le bloc suivant).
   if (scoresDict['etape_'+stepIdx] === undefined) {
-    scoresDict['etape_'+stepIdx] = teamState?.score_etape ?? 0;
+    scoresDict['etape_'+stepIdx] = 0;
   }
   // Ne pas écraser ep_N si déjà sauvegardé (ex: sauvegardé en continu pendant l'épreuve)
   if (scoresDict['ep_'+stepIdx] === undefined || (scoreEpreuve ?? 0) > (scoresDict['ep_'+stepIdx] || 0)) {
@@ -2184,10 +2186,10 @@ function subscribeRealtime() {
                 && stepIdxBase === prevBlocIdx && isCaptain) {
               const existingScore = getScores()['etape_'+prevBlocIdx];
               if (existingScore === undefined || existingScore === null) {
-                const shownNow = Math.min(5, teamState?.indices_shown || 0);
-                const scoreNow = Math.max(0, 10 - shownNow * 2);
-                saveScore('etape_'+prevBlocIdx, scoreNow);
-                db.from('jp_team_states').update({etape_status:'done', score_etape:scoreNow}).eq('equipe_nom',currentTeam);
+                // Étape quittée sans valider le mot-clé → 0 pt (le score n'est gagné
+                // que via validerMotcle).
+                saveScore('etape_'+prevBlocIdx, 0);
+                db.from('jp_team_states').update({etape_status:'done', score_etape:0}).eq('equipe_nom',currentTeam);
               } else {
                 db.from('jp_team_states').update({etape_status:'done'}).eq('equipe_nom',currentTeam);
               }
