@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-f</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-g</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -1131,8 +1131,8 @@ function calcScoreEpreuve(epreuve, rep) {
   if (epreuve.type === 'frise') {
     return Object.keys(rep).filter(k=>!isNaN(k)&&rep[k+'_correct']===true).length;
   } else if (epreuve.type === 'qcm') {
-    const qs = epreuve.questions||[];
-    return qs.filter((q,i)=>rep[i]===q.correct).length;
+    const anecdotes = (appData.anecdotes||[]).slice().sort((a,b)=>(a.ordre||0)-(b.ordre||0));
+    return anecdotes.filter((a,i)=>rep[i]===a.reponse).length;
   } else if (epreuve.type === 'villes') {
     return Object.keys(rep).filter(k => rep[k] && !k.endsWith('_correct') && rep[k+'_correct']===true).length;
   }
@@ -1710,31 +1710,51 @@ async function pbSaisir(lettre, valeur) {
 
 // ---- Épreuve QCM (Anecdotes Mariés) ----
 function renderEpreuveQCM(epreuve) {
+  // Le « quizz des mariés » (type qcm) = les anecdotes « Celui qui… » (Lui / Elle / Les 2),
+  // configurées dans la table anecdotes côté admin.
+  const anecdotes = (appData.anecdotes||[]).slice().sort((a,b)=>(a.ordre||0)-(b.ordre||0));
   const qIdx = teamState.question_idx || 0;
   const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
-  const questions = epreuve.questions || [];
-  if (!questions.length) return `<div class="card"><p style="font-size:14px">${epreuve.instructions||'Pas de questions configurées.'}</p></div>`;
-  if (qIdx >= questions.length) return `<div class="card" style="text-align:center"><div style="font-size:28px;margin-bottom:8px">✅</div><div style="font-size:15px;font-weight:500">Toutes les questions répondues !</div></div>`;
-  const q = questions[qIdx];
-  const opts = q.opts || q.options || [];
-  const alreadyAnswered = reponses[qIdx] !== undefined;
+  if (!anecdotes.length) return `<div class="card"><p style="font-size:14px">${epreuve.instructions||'Pas de questions configurées.'}</p></div>`;
+  if (qIdx >= anecdotes.length) {
+    const bons = anecdotes.filter((a,i)=>reponses[i]===a.reponse).length;
+    return `<div class="card" style="text-align:center">
+      <div style="font-size:28px;margin-bottom:8px">✅</div>
+      <div style="font-size:15px;font-weight:500">Toutes les questions répondues !</div>
+      <div style="font-size:13px;color:var(--ink-muted);margin-top:6px">${bons} / ${anecdotes.length} bonne${bons!==1?'s':''} réponse${bons!==1?'s':''}</div>
+    </div>`;
+  }
+  const a = anecdotes[qIdx];
+  const opts = ['Lui','Elle','Les 2'];
+  const chosen = reponses[qIdx];
+  const answered = chosen !== undefined;
+  const optBtns = opts.map(label => {
+    let cls = '';
+    if (answered) {
+      if (label === a.reponse) cls = ' correct';
+      else if (label === chosen) cls = ' wrong';
+    }
+    return `<div class="anec-card${cls}" style="flex:1;text-align:center;margin-bottom:0" onclick="${(isCaptain&&!answered)?`repQCM('${label}')`:''}">
+      <div class="anec-text" style="font-weight:500">${label}</div>
+    </div>`;
+  }).join('');
+  const isLastQ = qIdx >= anecdotes.length-1;
   return `<div class="card">
-    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">Question ${qIdx+1} / ${questions.length}</div>
-    <div style="font-size:15px;font-weight:500;margin-bottom:16px;line-height:1.5">${q.q||q.question||''}</div>
-    ${opts.map((opt,i)=>`
-      <div class="anec-card${alreadyAnswered ? (i===(q.correct||0)?' correct':(reponses[qIdx]===i?' wrong':'')) : ''}"
-        onclick="${isCaptain&&!alreadyAnswered?`repQCM(${i})`:''}">
-        <div class="anec-text">${opt}</div>
-      </div>`).join('')}
-    ${alreadyAnswered&&isCaptain?`<button class="btn btn-gold btn-full" style="margin-top:12px" onclick="qcmSuivant()">Question suivante →</button>`:''}
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px">Question ${qIdx+1} / ${anecdotes.length}</div>
+    <div style="font-size:11px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Celui qui…</div>
+    <div style="font-size:17px;font-weight:500;font-family:'Playfair Display',serif;margin-bottom:14px;line-height:1.4">${a.celui_qui||''}</div>
+    <div style="display:flex;gap:8px">${optBtns}</div>
+    ${answered&&a.commentaire?`<div style="margin-top:12px;background:${chosen===a.reponse?'var(--success-bg)':'var(--info-bg)'};border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:${chosen===a.reponse?'var(--success)':'var(--ink-soft)'};line-height:1.5">💡 ${a.commentaire}</div>`:''}
+    ${answered&&isCaptain?`<button class="btn btn-gold btn-full" style="margin-top:12px" onclick="qcmSuivant()">${isLastQ?'Terminer ✓':'Question suivante →'}</button>`:''}
   </div>`;
 }
 
-async function repQCM(optIdx) {
+async function repQCM(rep) {
   if (!isCaptain) return;
   const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
   const qIdx = teamState.question_idx||0;
-  reponses[qIdx] = optIdx;
+  if (reponses[qIdx] !== undefined) return;
+  reponses[qIdx] = rep;
   await db.from('jp_team_states').update({reponse_epreuve:JSON.stringify(reponses)}).eq('equipe_nom',currentTeam);
   Object.assign(teamState, {reponse_epreuve:JSON.stringify(reponses)});
   renderTeamView();
@@ -2131,10 +2151,11 @@ function subscribeRealtime() {
             const prevPhase   = lastPhase;
             const prevBlocIdx = lastBlocIdx;
 
-            // Transition : fin d'épreuve (changement de bloc)
-            // Seulement si prevBlocIdx correspond vraiment au bloc en cours en base
+            // Transition : fin d'épreuve (changement de bloc OU passage en 'done' pour
+            // le dernier bloc — où s2.blocIdx reste égal au dernier index).
             const stepIdxBase = teamState?.step_idx ?? 0;
-            if (prevBlocIdx !== null && s2.blocIdx !== prevBlocIdx && teamState?.epreuve_status !== 'done'
+            const finEpreuve = (s2.blocIdx !== prevBlocIdx || (s2.phase === 'done' && prevPhase === 'epreuve'));
+            if (prevBlocIdx !== null && finEpreuve && teamState?.epreuve_status !== 'done'
                 && stepIdxBase === prevBlocIdx && isCaptain) {
               const p3 = getParcours();
               const b3 = p3[prevBlocIdx];
