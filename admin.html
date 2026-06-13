@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-o</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-p</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -365,75 +365,21 @@ input[type=file]{display:none}
     <button class="btn btn-danger" onclick="openResetModal()">Réinitialiser et archiver</button>
   </div>
 
-  <!-- JEU DE PISTE -->
+  <!-- JEU -->
   <div id="aJdp" class="page">
-    <div class="nav-tabs" style="margin:-16px -0px 16px;border-radius:0">
-      <button class="nav-tab active" onclick="jdpTab('controle',this)">🎮 Contrôle</button>
-      <button class="nav-tab" onclick="jdpTab('suivi',this)">📊 Équipes &amp; scores</button>
+    <div class="card">
+      <div class="card-title">Contrôle du jeu</div>
+      <div id="jdpGameStatus"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px" id="jdpGameActions"></div>
     </div>
-
-    <!-- Contrôle -->
-    <div id="jdpControle" class="jdp-tab-page" style="display:block">
-      <div class="card">
-        <div class="card-title">État du jeu de piste</div>
-        <div id="jdpGameStatus"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px" id="jdpGameActions"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Vue d'ensemble équipes</div>
-        <div id="jdpTeamOverview"></div>
-      </div>
+    <div id="jdpSuiviContent"></div>
+    <!-- Pages héritées (scoring) conservées masquées pour compat -->
+    <div id="jdpScoring" style="display:none">
+      <input type="number" id="jdpScoreDepart" value="10"><input type="number" id="jdpCoutIndice" value="2">
+      <input type="number" id="jdpPerteTemps" value="1"><input type="number" id="jdpDureeMax" value="10">
+      <input type="number" id="jdpScoreEpreuve" value="10"><div id="jdpScoringPreview"></div><span id="jdpScoringSaveMsg"></span>
     </div>
-
-    <!-- Suivi -->
-    <div id="jdpSuivi" class="jdp-tab-page" style="display:none">
-      <div id="jdpSuiviContent"></div>
-    </div>
-
-
-    <!-- Scoring -->
-    <div id="jdpScoring" class="jdp-tab-page" style="display:none">
-      <div class="card">
-        <div class="card-title">Règles de scoring</div>
-        <div style="margin-bottom:14px">
-          <div class="field-label">Score de départ par étape (points)</div>
-          <input type="number" id="jdpScoreDepart" value="10" min="1" max="20" style="width:80px;font-size:16px;text-align:center">
-        </div>
-        <div style="margin-bottom:14px">
-          <div class="field-label">Coût d'un indice (points perdus)</div>
-          <input type="number" id="jdpCoutIndice" value="2" min="1" max="5" style="width:80px;font-size:16px;text-align:center">
-        </div>
-        <div style="margin-bottom:14px">
-          <div class="field-label">Perte par minute écoulée (points)</div>
-          <input type="number" id="jdpPerteTemps" value="1" min="0" max="3" style="width:80px;font-size:16px;text-align:center">
-        </div>
-        <div style="margin-bottom:14px">
-          <div class="field-label">Durée max avant indice automatique (minutes)</div>
-          <input type="number" id="jdpDureeMax" value="10" min="5" max="30" style="width:80px;font-size:16px;text-align:center">
-        </div>
-        <div style="margin-bottom:14px">
-          <div class="field-label">Score max épreuve GM (points)</div>
-          <input type="number" id="jdpScoreEpreuve" value="10" min="1" max="20" style="width:80px;font-size:16px;text-align:center">
-        </div>
-        <div class="divider"></div>
-        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--ink-muted);margin-bottom:12px" id="jdpScoringPreview"></div>
-        <button class="btn btn-gold" onclick="jdpSaveScoring()">💾 Enregistrer</button>
-        <span class="save-msg" id="jdpScoringSaveMsg">Sauvegardé ✓</span>
-      </div>
-    </div>
-
-    <!-- Scores JP -->
-    <div id="jdpScores" class="jdp-tab-page" style="display:none">
-      <div class="stat-grid" id="jdpStatGrid"></div>
-      <div class="card">
-        <div class="card-title">Classement</div>
-        <div id="jdpLeaderboard"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Détail par équipe</div>
-        <div id="jdpScoreDetail"></div>
-      </div>
-    </div>
+    <div id="jdpScores" style="display:none"><div id="jdpStatGrid"></div><div id="jdpLeaderboard"></div><div id="jdpScoreDetail"></div></div>
   </div>
 </div>
 
@@ -949,6 +895,7 @@ async function enterGM(){
   _adminPhotoPoll=setInterval(pollAdminPhotos,5000);
   showAppPage('aJdp');
   renderJdpControle();
+  renderJdpSuivi();
   renderAdminPhotos();
 }
 
@@ -1039,7 +986,7 @@ function adminTab(name,btn){
   if(name==='classement') renderLeaderboard('adminLeaderboard');
   if(name==='joueurs') renderJoueurs();
   if(name==='etapes') renderEtapesTabs();
-  if(name==='jdp') renderJdpControle();
+  if(name==='jdp'){ renderJdpControle(); renderJdpSuivi(); }
 }
 function gmTab(name,btn){
   document.querySelectorAll('#gmApp .page').forEach(p=>p.classList.remove('active'));
@@ -3968,17 +3915,14 @@ async function jdpInit() {
 function jdpSubscribeRealtime() {
   // Noms uniques avec timestamp pour éviter les conflits entre instances
   const ts = Date.now();
+  const jdpActive=()=>document.getElementById('aJdp')?.classList.contains('active');
   db.channel('admin-jdp-game-'+ts).on('postgres_changes',{event:'*',schema:'public',table:'jp_game_state'},p=>{
     if(p.new) jdpData.gameState=p.new;
-    const active=document.querySelector('#aJdp .jdp-tab-page[style*="block"]');
-    if(active?.id==='jdpControle') renderJdpControle();
+    if(jdpActive()){ renderJdpControle(); renderJdpSuivi(); }
   }).subscribe();
   db.channel('admin-jdp-teams-'+ts).on('postgres_changes',{event:'*',schema:'public',table:'jp_team_states'},p=>{
     if(p.new) jdpData.teamStates[p.new.equipe_nom]=p.new;
-    const active=document.querySelector('#aJdp .jdp-tab-page[style*="block"]');
-    if(active?.id==='jdpControle') renderJdpControle();
-    if(active?.id==='jdpSuivi')    renderJdpSuivi();
-    if(active?.id==='jdpScores')   renderJdpScores();
+    if(jdpActive()) renderJdpSuivi();
   }).subscribe();
 }
 
@@ -4021,23 +3965,6 @@ function renderJdpControle() {
     statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--info-bg);color:var(--info);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">✅ Jeu terminé</div><p style="font-size:13px;color:var(--ink-muted)">Archivez la partie pour pouvoir relancer un nouveau jeu.</p>`;
     actEl.innerHTML=`<button class="btn btn-gold" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>`;
   }
-  const ov=document.getElementById('jdpTeamOverview');
-  if(!ov) return;
-  const nb=jdpData.lieux.length;
-  ov.innerHTML=appData.teams.map(t=>{
-    const ts=jdpData.teamStates[t];
-    const phase=ts?.phase||'waiting';
-    const step=ts?.step_idx??-1;
-    let dotColor='var(--ink-muted)',statusTxt='En attente';
-    if(phase==='done'){dotColor='var(--success)';statusTxt='Terminé';}
-    else if(phase!=='waiting'){dotColor='var(--amber)';statusTxt=`Étape ${step+1}/${nb} · ${jdpPhaseLabel(phase)}`;}
-    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--warm-white);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px">
-      <span style="width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0;${phase!=='waiting'&&phase!=='done'?'animation:pulse 1.5s infinite':''}"></span>
-      <span style="flex:1;font-size:14px;font-weight:500">${t}</span>
-      <span style="font-size:12px;color:var(--ink-muted)">${statusTxt}</span>
-      <span style="font-size:13px;font-weight:500;color:var(--gold-dark)">${ts?.total_score||0} pts</span>
-    </div>`;
-  }).join('')||'<div class="notice">Aucune équipe configurée.</div>';
 }
 
 function jdpPhaseLabel(p){
@@ -4123,17 +4050,45 @@ function jdpTeamParcours(ts,team){
   return (p||[]).map(b=> typeof b==='object'?b:{delai:0,etapeId:b,epreuveId:null});
 }
 
+// Statut d'une équipe : connexion / capitaine / avancement
+function jdpTeamStatus(ts){
+  const gs=jdpData.gameState?.status||'waiting';
+  if(gs==='waiting') return {dot:'var(--ink-muted)',txt:'En attente du démarrage'};
+  if(!ts) return {dot:'var(--ink-muted)',txt:'Pas encore connecté'};
+  const phase=ts.phase||'waiting';
+  if(phase==='done') return {dot:'var(--success)',txt:'✅ Jeu terminé'};
+  // Capitaine : élu en base (jp_config) ou calculé depuis les votes
+  let cap=appData.capitaines[ts.equipe_nom]||null;
+  let votesN=0;
+  try{ const v=JSON.parse(ts.votes_capitaine||'{}'); votesN=Object.keys(v).length;
+    if(!cap){ const tally={}; Object.values(v).forEach(x=>tally[x]=(tally[x]||0)+1);
+      const membres=appData.joueurs.filter(j=>j.equipe_nom===ts.equipe_nom).length;
+      const win=Object.entries(tally).find(([_,n])=>n>membres/2); if(win) cap=win[0]; } }catch(e){}
+  // Activité réelle dans l'app (le déroulé des phases est piloté par le temps, pas par
+  // la connexion) : votes, réponses d'épreuve ou scores enregistrés.
+  const hasRep = ts.reponse_epreuve && ts.reponse_epreuve!=='{}' && ts.reponse_epreuve!=='';
+  const hasScore = Object.keys(jdpTeamScores(ts)).length>0;
+  const connecte = votesN>0 || hasRep || hasScore || !!cap;
+  if(cap){
+    const step=ts.step_idx??0;
+    return {dot:'var(--success)',txt:`⚓ ${cap} · Étape ${step+1} · ${jdpPhaseLabel(phase)}`};
+  }
+  if(connecte) return {dot:'var(--amber)',txt:`📱 Connecté · élection du capitaine (${votesN} vote${votesN>1?'s':''})`};
+  return {dot:'var(--ink-muted)',txt:'⚪ Application pas encore ouverte'};
+}
+
 function renderJdpSuivi(){
   const el=document.getElementById('jdpSuiviContent');
   if(!el) return;
 
-  const cellHtml=(c)=>{
+  const SQ=34; // largeur d'une colonne carré
+  const labelCell=(txt)=>`<div style="flex:0 0 ${SQ}px;width:${SQ}px;font-size:9px;line-height:1.1;color:var(--ink-muted);text-align:center;height:26px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${txt||''}</div>`;
+  const squareCell=(c)=>{
     const bg=c.filled?(c.kind==='etape'?'#1E4A5A':'#1E3A4A'):'transparent';
     const bdr=c.filled?bg:'var(--border)';
     const col=c.filled?'#fff':'var(--ink-muted)';
-    return `<div style="display:flex;flex-direction:column;align-items:center;flex:0 0 56px;width:56px">
-      <div style="font-size:9px;line-height:1.15;color:var(--ink-muted);height:24px;overflow:hidden;text-align:center;margin-bottom:2px">${c.label}</div>
-      <div style="width:30px;height:30px;border-radius:4px;background:${bg};border:2px solid ${bdr};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${col}">${c.val}</div>
+    return `<div style="flex:0 0 ${SQ}px;width:${SQ}px;display:flex;justify-content:center">
+      <div style="width:28px;height:28px;border-radius:4px;background:${bg};border:2px solid ${bdr};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${col}">${c.val}</div>
     </div>`;
   };
 
@@ -4141,8 +4096,7 @@ function renderJdpSuivi(){
     const ts=jdpData.teamStates[t];
     const sc=jdpTeamScores(ts);
     const parcours=jdpTeamParcours(ts,t);
-    const step=ts?.step_idx??-1;
-    const phase=ts?.phase||'waiting';
+    const st=jdpTeamStatus(ts?{...ts,equipe_nom:t}:null);
 
     let total=0;
     const cells=[];
@@ -4152,28 +4106,34 @@ function renderJdpSuivi(){
       const etScore=sc['etape_'+i];
       const hasEt=etScore!==undefined&&etScore!==null;
       if(hasEt) total+=etScore||0;
-      cells.push({label:'É'+(i+1)+(et?.nom?'<br>'+et.nom:''), val:hasEt?etScore:'', filled:hasEt, kind:'etape'});
+      cells.push({label:(et?.nom||('Étape '+(i+1))), val:hasEt?etScore:'', filled:hasEt, kind:'etape'});
       if(ep){
         const epScore=sc['ep_'+i];
         const hasEp=epScore!==undefined&&epScore!==null;
         if(hasEp) total+=epScore||0;
-        cells.push({label:(ep.title||('Ép'+(i+1))), val:hasEp?epScore:'', filled:hasEp, kind:'epreuve'});
+        cells.push({label:(ep.title||('Épreuve '+(i+1))), val:hasEp?epScore:'', filled:hasEp, kind:'epreuve'});
       }
     });
 
-    // Quinconce : carrés pairs sur la 1re ligne, impairs sur la 2e ligne décalée
-    const row1=cells.filter((_,i)=>i%2===0).map(cellHtml).join('');
-    const row2=cells.filter((_,i)=>i%2===1).map(cellHtml).join('');
-    const phaseTxt = phase==='done'?'Terminé':(phase==='waiting'?'En attente':`Étape ${step+1} · ${jdpPhaseLabel(phase)}`);
+    // Libellés en quinconce : étapes (cellules paires) sur une ligne, épreuves
+    // (cellules impaires) sur la ligne suivante, puis tous les carrés alignés.
+    const lineEtapes  = cells.map(c=>labelCell(c.kind==='etape'?c.label:'')).join('');
+    const lineEpreuves= cells.map(c=>labelCell(c.kind==='epreuve'?c.label:'')).join('');
+    const lineSquares = cells.map(squareCell).join('');
 
     return `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div><span style="font-size:15px;font-weight:600">${t}</span> <span style="font-size:12px;color:var(--ink-muted)">· ${phaseTxt}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:9px;height:9px;border-radius:50%;background:${st.dot};flex-shrink:0"></span>
+          <span style="font-size:15px;font-weight:600">${t}</span>
+        </div>
         <span style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark)">${total} <span style="font-size:11px;color:var(--ink-muted);font-weight:500">pts</span></span>
       </div>
+      <div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">${st.txt}</div>
       <div style="overflow-x:auto">
-        <div style="display:flex;gap:6px;margin-bottom:4px">${row1}</div>
-        <div style="display:flex;gap:6px;margin-left:31px">${row2}</div>
+        <div style="display:flex">${lineEtapes}</div>
+        <div style="display:flex">${lineEpreuves}</div>
+        <div style="display:flex;margin-top:2px">${lineSquares}</div>
       </div>
     </div>`;
   }).join('')||'<div class="notice">Aucune équipe.</div>';
