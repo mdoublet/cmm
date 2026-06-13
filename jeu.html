@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-b</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-c</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -438,7 +438,7 @@ function updateScoreBand() {
   const phase = sched.phase;
 
   if (phase === 'marche' || phase === 'etape') {
-    const shown = teamState.indices_shown || 0;
+    const shown = (teamState.indices_shown >= 6) ? 6 : indicesAffichesNow(sched);
     if (shown >= 6) {
       // Mot-clé trouvé — ne pas afficher "0 pts potentiels" en rouge
       band.style.display = 'none';
@@ -645,14 +645,15 @@ function renderTeamView() {
       etVal = scoreEpFinal;
       etStyle = 'font-size:12px;font-weight:700;color:white';
     } else if (etapeTerminee && isCurBloc) {
-      // Phase règles/épreuve — score étape figé
+      // Phase règles/épreuve, mot-clé non validé (sinon scoreEpFinal aurait été pris
+      // au-dessus) → 0 pt pour l'étape.
       etBg = '#1E4A5A'; etBdr = '#1E4A5A';
-      const shownFig = teamState?.indices_shown || 0;
-      etVal = shownFig >= 6 ? 0 : Math.max(0, maxEp - shownFig * 2);
+      etVal = 0;
       etStyle = 'font-size:12px;font-weight:700;color:white';
     } else if (etapeEnCours) {
       etBg = 'transparent'; etBdr = 'var(--border)';
-      const shownCur = teamState?.indices_shown || 0;
+      // Score potentiel en direct = calcul temporel (cohérent avec l'affichage des indices)
+      const shownCur = indicesAffichesNow(sched);
       etVal = Math.max(0, maxEp - shownCur * 2);
       etStyle = 'font-size:12px;font-weight:400;font-style:italic;color:#2A6A7A';
     } else {
@@ -882,6 +883,23 @@ function renderMarcheSchedule(sched, parcours) {
 }
 
 // ---- Étape (schedule) — indices débloqués auto après marche ----
+// Nombre d'indices à afficher = fonction DÉTERMINISTE du temps écoulé dans la phase
+// étape. Aucune écriture en base, donc aucune course possible : la valeur ne peut
+// que croître au fil du temps (plus de clignotement apparition/disparition).
+const ETAPE_NB_INDICES = 5;
+const ETAPE_SCORE_MAX = 10;
+const ETAPE_COUT_INDICE = 2;
+function indicesAffichesNow(sched) {
+  if (!sched || sched.phase !== 'etape') return 0;
+  const mult = gameState?.time_multiplier || 1;
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const virtualNow = H + (Date.now() - H) * mult;
+  const elapsed = virtualNow - sched.phaseStart;
+  const trancheDurMs = (sched.phaseEnd - sched.phaseStart) / (ETAPE_NB_INDICES + 1);
+  if (trancheDurMs <= 0 || elapsed <= 0) return 0;
+  return Math.min(ETAPE_NB_INDICES, Math.floor(elapsed / trancheDurMs));
+}
+
 function renderEtapeSchedule(sched, parcours) {
   const stepIdx = sched.blocIdx;
   const bloc = parcours[stepIdx];
@@ -891,8 +909,7 @@ function renderEtapeSchedule(sched, parcours) {
   const etape   = appData.etapes.find(e=>String(e.id)===etapeId) || appData.etapes[stepIdx];
   if (!etape) { document.getElementById('teamContent').innerHTML=`<div class="notice">Étape introuvable.</div>`; return; }
 
-  // Timer : même clé que la marche pour que le décompte soit continu
-  const dureeEtapeMs2 = ((etape.dureeEtape || bloc.dureeEtape || 300)) * 1000;
+  // Timer
   const endsAt = sched.phaseEnd;
   const dur = (endsAt - sched.phaseStart)/1000;
   const key = 'etape_total_'+currentTeam+'_'+stepIdx;
@@ -900,98 +917,52 @@ function renderEtapeSchedule(sched, parcours) {
 
   const mult = gameState?.time_multiplier || 1;
   const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
-  const realElapsed = Date.now() - H;
-  const virtualNow = H + realElapsed * mult;
+  const virtualNow = H + (Date.now() - H) * mult;
   const remaining = (endsAt - virtualNow) / 1000;
 
-  // Score : 10 pts de départ, -2 par indice demandé (5 indices max)
-  const SCORE_MAX = 10;
-  const COUT_INDICE = 2;
-  const NB_INDICES = 5;
+  const NB_INDICES = ETAPE_NB_INDICES;
+  const SCORE_MAX  = ETAPE_SCORE_MAX;
 
-  let indicesShown = teamState?.indices_shown || 0;
-  // Réinitialiser si on change d'étape — SAUF si indices_shown=6 (mot-clé trouvé)
-  if ((teamState?.step_idx ?? -1) !== stepIdx && indicesShown < 6) {
-    indicesShown = 0;
-    db.from('jp_team_states').update({indices_shown:0, score_etape:SCORE_MAX, step_idx:stepIdx})
-      .eq('equipe_nom',currentTeam).then(()=>{
-        if(teamState){teamState.indices_shown=0; teamState.score_etape=SCORE_MAX; teamState.step_idx=stepIdx;}
-      });
+  // indices_shown ne sert plus que de DRAPEAU "mot-clé trouvé" (=6).
+  // Changement d'étape : remettre le drapeau à 0 une seule fois.
+  if ((teamState?.step_idx ?? -1) !== stepIdx && (teamState?.indices_shown||0) >= 6) {
+    teamState.indices_shown = 0;
+    db.from('jp_team_states').update({indices_shown:0, step_idx:stepIdx}).eq('equipe_nom',currentTeam)
+      .then(()=>{ if(teamState){teamState.indices_shown=0; teamState.step_idx=stepIdx;} });
+  } else if ((teamState?.step_idx ?? -1) !== stepIdx) {
+    teamState.step_idx = stepIdx;
+    db.from('jp_team_states').update({step_idx:stepIdx}).eq('equipe_nom',currentTeam).then(()=>{});
   }
-  // Mot-clé déjà trouvé (indices_shown=6) → écran d'attente
-  if (indicesShown >= 6) {
-    // indices_shown=6 = mot-clé trouvé. Score = 10 - (vrais indices montrés) * 2
-    // On ne peut pas savoir combien d'indices ont été montrés avant la validation
-    // Utiliser score_etape s'il est cohérent (< 10 et >= 0)
-    const scoreActuel = (teamState?.score_etape !== undefined && teamState.score_etape >= 0 && teamState.score_etape <= 10)
-      ? teamState.score_etape
-      : 10;
+
+  // Mot-clé déjà trouvé (drapeau =6 sur CETTE étape) → écran d'attente
+  if ((teamState?.indices_shown||0) >= 6 && (teamState?.step_idx ?? -1) === stepIdx) {
+    const scoreActuel = (teamState?.score_etape >= 0 && teamState?.score_etape <= 10) ? teamState.score_etape : 0;
     renderAttenteFinEtape(scoreActuel, stepIdx, parcours);
     return;
   }
 
-  // Initialiser score_etape
-  if (teamState?.score_etape === undefined || teamState?.score_etape === null) {
-    db.from('jp_team_states').update({score_etape: SCORE_MAX}).eq('equipe_nom', currentTeam).then(()=>{});
-    if (teamState) teamState.score_etape = SCORE_MAX;
-  }
+  // Nombre d'indices affichés = pur calcul temporel
+  const indicesAffiches = indicesAffichesNow(sched);
+  const scoreActuel = Math.max(0, SCORE_MAX - indicesAffiches * ETAPE_COUT_INDICE);
+  const trancheDurMs = (sched.phaseEnd - sched.phaseStart) / (NB_INDICES + 1);
 
-  // Logique N+1 tranches : tranche 0 = attente (pas d'indice), tranche k = indice k
-  const etapeElapsed = virtualNow - sched.phaseStart;
-  const etapeDurMs = sched.phaseEnd - sched.phaseStart;
-  const trancheDurMs = etapeDurMs / (NB_INDICES + 1);
-
-  // Combien d'indices dus ? seulement si elapsed > 0 pour éviter les faux positifs
-  const trancheActuelle = etapeElapsed > 0 ? Math.floor(etapeElapsed / trancheDurMs) : 0;
-  const indicesDus = Math.min(NB_INDICES, Math.max(0, trancheActuelle));
-
-  if (indicesDus > indicesShown) {
-    const newScore = Math.max(0, SCORE_MAX - indicesDus * COUT_INDICE);
-    db.from('jp_team_states').update({indices_shown: indicesDus, score_etape: newScore}).eq('equipe_nom', currentTeam)
-      .then(() => { if (teamState) { teamState.indices_shown = indicesDus; teamState.score_etape = newScore; }});
-  }
-
-  // Planifier les prochains déblocages
-  for (let i = Math.max(indicesShown, indicesDus); i < NB_INDICES; i++) {
-    // L'indice i+1 se débloque au début de la tranche i+1
+  // Replanifier un simple RE-RENDER à chaque prochain palier (jamais d'écriture en base)
+  for (let i = indicesAffiches; i < NB_INDICES; i++) {
     const triggerAt = sched.phaseStart + trancheDurMs * (i + 1);
     const realDelayMs = Math.max(0, (triggerAt - virtualNow) / mult);
-    if (realDelayMs > 0 && realDelayMs < 3600000) {
-      scheduleTimer('indice_'+sched.blocIdx+'_'+(i+1), Date.now()+realDelayMs, async () => {
-        if (!teamState) return;
-        // Vérifier en base directement pour ne pas écrire si étape déjà terminée
-        const {data: fresh} = await db.from('jp_team_states').select('etape_status,indices_shown,step_idx').eq('equipe_nom', currentTeam).single();
-        if (!fresh) return;
-        if (fresh.etape_status === 'done' || (fresh.indices_shown||0) >= 6 || fresh.step_idx !== sched.blocIdx) {
-          // Étape terminée ou bloc changé — synchroniser local et ne rien écrire
-          if (teamState) {
-            teamState.etape_status = fresh.etape_status;
-            teamState.indices_shown = fresh.indices_shown;
-            teamState.step_idx = fresh.step_idx;
-          }
-          return;
-        }
-        const shown = fresh.indices_shown || 0;
-        const H2 = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
-        const phase2 = computePhaseFromSchedule(H2, parcours);
-        if (shown <= i && phase2.phase === 'etape' && phase2.blocIdx === sched.blocIdx) {
-          const newScore = Math.max(0, SCORE_MAX - (i+1) * COUT_INDICE);
-          if(teamState){ teamState.indices_shown=i+1; teamState.score_etape=newScore; }
-          db.from('jp_team_states').update({indices_shown: i+1, score_etape: newScore}).eq('equipe_nom', currentTeam);
-          renderTeamView();
-        }
-      });
+    if (realDelayMs >= 0 && realDelayMs < 3600000) {
+      scheduleTimer('indice_'+stepIdx+'_'+(i+1), Date.now()+realDelayMs+40, () => renderTeamView());
     }
   }
 
-  // Fin du temps → passer directement à l'épreuve (phase calculée changera automatiquement)
+  // Fin du temps → étape terminée (mot-clé raté) à 0 pt
   const realRemainingMs = Math.max(0, remaining * 1000 / mult);
   if (realRemainingMs > 0) {
-    scheduleTimer('expir_etape_'+sched.blocIdx, Date.now()+realRemainingMs, () => {
+    scheduleTimer('expir_etape_'+stepIdx, Date.now()+realRemainingMs, () => {
       if (!teamState) return;
       const H2 = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
       const phase2 = computePhaseFromSchedule(H2, parcours);
-      if (phase2.phase === 'etape' && phase2.blocIdx === sched.blocIdx && teamState.etape_status !== 'done') {
+      if (phase2.phase === 'etape' && phase2.blocIdx === stepIdx && teamState.etape_status !== 'done') {
         if(teamState){teamState.indices_shown=6; teamState.score_etape=0; teamState.etape_status='done';}
         db.from('jp_team_states').update({indices_shown:6, score_etape:0, etape_status:'done'}).eq('equipe_nom',currentTeam);
         renderTeamView();
@@ -999,28 +970,26 @@ function renderEtapeSchedule(sched, parcours) {
     });
   }
 
-  // Indices : textes à la suite, sans cadenas, sans numéros
+  // Indices : textes affichés à la suite
   const indicesTextes = [];
-  for (let k = 0; k < 5; k++) {
-    if (k < indicesShown) {
+  for (let k = 0; k < NB_INDICES; k++) {
+    if (k < indicesAffiches) {
       const txt = (etape.indices||[])[k]||'';
       if (txt) indicesTextes.push(txt.replace(/\n/g,'<br>'));
     }
   }
-  // Mot-clé révélé si tous les indices épuisés
-  if (indicesShown >= 5) {
+  // Après le 5e indice, on révèle le mot-clé pour éviter un blocage
+  if (indicesAffiches >= NB_INDICES) {
     const codeTxt = (etape.indices||[])[5]||etape.code||'';
     if (codeTxt) indicesTextes.push(`🔑 <strong>${codeTxt}</strong>`);
   }
-  // Temps avant prochain indice
-  const trancheDurMsDisplay = (sched.phaseEnd - sched.phaseStart) / (NB_INDICES + 1);
-  const prochainK = Math.min(indicesShown, NB_INDICES - 1);
-  const nextTrigger = sched.phaseStart + trancheDurMsDisplay * (prochainK + 1);
-  const secsToNext = Math.max(0, Math.round((nextTrigger - virtualNow) / 1000));
+  // Temps avant le prochain indice
+  const prochainTrigger = sched.phaseStart + trancheDurMs * (indicesAffiches + 1);
+  const secsToNext = Math.max(0, Math.round((prochainTrigger - virtualNow) / 1000));
 
   let indicesHtml = '';
-  if (indicesTextes.length || (indicesShown < NB_INDICES && secsToNext > 0)) {
-    const prochainTxt = (indicesShown < NB_INDICES && secsToNext > 0)
+  if (indicesTextes.length || (indicesAffiches < NB_INDICES && secsToNext > 0)) {
+    const prochainTxt = (indicesAffiches < NB_INDICES && secsToNext > 0)
       ? `<div style="margin-top:${indicesTextes.length?'8px':'0'};padding-top:${indicesTextes.length?'8px':'0'};${indicesTextes.length?'border-top:1px dashed var(--border);':''}font-size:11px;color:var(--ink-muted)">💡 Prochain indice dans ${secsToNext}s</div>`
       : '';
     indicesHtml = `<div style="padding:10px 14px;background:var(--warm-white);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px">
@@ -1028,8 +997,6 @@ function renderEtapeSchedule(sched, parcours) {
       ${prochainTxt}
     </div>`;
   }
-
-  const scoreActuel = teamState?.score_etape ?? SCORE_MAX;
 
   const galetHtml = isCaptain ? `
     <div class="card">
@@ -1229,8 +1196,8 @@ async function validerMotcle() {
   const virtualNowV = HV + (Date.now()-HV)*multV;
   const schedV = computePhaseFromSchedule(HV, parcours);
   const remainingV = (schedV.phaseEnd - virtualNowV) / 1000;
-  // Score = 0 si temps écoulé, sinon basé sur indices montrés
-  const shown = Math.min(5, teamState?.indices_shown || 0);
+  // Score = 0 si temps écoulé, sinon basé sur le nombre d'indices affichés (calcul temporel)
+  const shown = Math.min(5, indicesAffichesNow(schedV));
   const scoreEtape = remainingV <= 0 ? 0 : Math.max(0, 10 - shown * 2);
 
   // 1. Mettre à jour teamState LOCAL immédiatement
@@ -1387,6 +1354,9 @@ async function loadPhotoThumb(photoId, imgElId) {
 }
 
 let _lastSyncPhotos = 0;
+// Mémorise les photos déjà notifiées (id → statut) pour éviter de re-jouer le toast/son
+// à chaque resynchronisation. Robuste même si l'état local est ré-écrasé par un écho.
+const _photoNotified = new Map();
 async function syncPhotosFromDB(epreuve) {
   if (!isCaptain) return;
   // Throttle : ne pas appeler plus d'une fois par 2 secondes (le Realtime gère la fraîcheur)
@@ -1448,39 +1418,41 @@ async function syncPhotosFromDB(epreuve) {
   const oldStr = JSON.stringify(oldState);
   const newStr = JSON.stringify(state);
 
+  // Notifier le joueur (toast + son) à CHAQUE photo qui passe en validée/refusée,
+  // une seule fois par photo (via _photoNotified). Indépendant de oldStr/newStr pour
+  // ne jamais boucler même si l'état local est ré-écrasé par un écho Realtime.
+  ['ch1','ch2'].forEach((k, ci) => {
+    (state[k].attempts || []).forEach(a => {
+      if (!a || !a.id) return;
+      if (a.statut !== 'refusee' && a.statut !== 'validee') return;
+      if (_photoNotified.get(a.id) === a.statut) return;
+      _photoNotified.set(a.id, a.statut);
+      if (a.statut === 'refusee') {
+        showToast({icon:'❌', title:'Photo refusée', msg:`Challenge ${ci===0?'Caroline':'Marc'} — vous pouvez soumettre un nouvel essai`, type:'danger', duration:9000});
+        try { playJpSound(false); } catch(e) {}
+      } else {
+        showToast({icon:'✅', title:`Photo validée — +${a.points||0} pts`, msg:`Challenge ${ci===0?'Caroline':'Marc'}`, type:'success', duration:7000});
+        try { playJpSound(true); } catch(e) {}
+      }
+    });
+  });
+
   if (oldStr !== newStr) {
     if (oldState.ch1?.done && !state.ch1.done) state.ch1.done = true;
     if (oldState.ch2?.done && !state.ch2.done) state.ch2.done = true;
 
-    // Détecter les transitions en_attente → validée/refusée pour avertir le joueur
-    // (toast + son) et lui permettre de soumettre un nouvel essai en cas de refus.
-    ['ch1','ch2'].forEach((k, ci) => {
-      const newAtt = state[k].attempts || [];
-      const oldAtt = oldState[k].attempts || [];
-      newAtt.forEach((a, i) => {
-        if (!a) return;
-        const before = oldAtt[i];
-        const wasPending = !before || before.statut === 'en_attente';
-        if (wasPending && a.statut === 'refusee') {
-          showToast({icon:'❌', title:'Photo refusée', msg:`Challenge ${ci===0?'Caroline':'Marc'} — vous pouvez soumettre un nouvel essai`, type:'danger', duration:9000});
-          try { playJpSound(false); } catch(e) {}
-        } else if (wasPending && a.statut === 'validee') {
-          showToast({icon:'✅', title:`Photo validée — +${a.points||0} pts`, msg:`Challenge ${ci===0?'Caroline':'Marc'}`, type:'success', duration:7000});
-          try { playJpSound(true); } catch(e) {}
-        }
-      });
-    });
-
     teamState.reponse_epreuve = JSON.stringify(state);
-    // Sauvegarder uniquement le score (pas reponse_epreuve)
+    // PERSISTER reponse_epreuve : la table photos est la source de vérité, on réaligne
+    // jp_team_states pour qu'un écho Realtime ne revienne pas à l'état « en attente »
+    // (ce qui rebloquait la soumission d'un nouvel essai).
+    await db.from('jp_team_states').update({reponse_epreuve: JSON.stringify(state)}).eq('equipe_nom', currentTeam);
+    // Sauvegarder le score
     const total = (state.ch1.points||0) + (state.ch2.points||0);
     const currentScore = (getScores()['ep_'+ (teamState.step_idx||0)] || 0);
     if (total !== currentScore) {
       await saveScore('ep_'+ (teamState.step_idx||0), total);
     }
-    // Le state local vient de changer (statut admin) → re-render pour que le joueur
-    // voie le refus/validation et le bouton de nouvel essai. _lastSyncPhotos a été
-    // positionné en début de fonction, donc le sync ré-entrant sera ignoré (pas de boucle).
+    // Re-render pour afficher le refus/validation et le bouton de nouvel essai.
     renderTeamView();
   }
 }

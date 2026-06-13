@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-b</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-c</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -4080,8 +4080,13 @@ async function jdpResetGame(){
   jdpData.teamStates={};
   await db.from('jp_game_state').upsert({id:1,status:'waiting',started_at:null},{onConflict:'id'});
   await db.from('jp_team_states').delete().neq('equipe_nom','__none__');
+  // Supprimer les photos du jeu précédent pour éviter tout reliquat (sinon le joueur
+  // voit des photos « refusées » dès le début de l'épreuve photo).
+  await db.from('photos').delete().neq('id',0);
+  appData.teams.forEach(t=>{ challengeState[t]={1:{attempts:[],done:false,points:0},2:{attempts:[],done:false,points:0}}; });
+  pendingPhotoCount=0;_lastPendingSeen=0;updateAdminPhotoBadge();
   renderJdpControle();
-  showToast({icon:'🔄',title:'Jeu de piste réinitialisé',duration:3000});
+  showToast({icon:'🔄',title:'Jeu de piste réinitialisé',msg:'États et photos remis à zéro.',duration:3000});
 }
 
 // ---- Suivi ----
