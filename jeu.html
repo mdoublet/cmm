@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-c</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-d</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -909,9 +909,12 @@ function renderEtapeSchedule(sched, parcours) {
   const etape   = appData.etapes.find(e=>String(e.id)===etapeId) || appData.etapes[stepIdx];
   if (!etape) { document.getElementById('teamContent').innerHTML=`<div class="notice">Étape introuvable.</div>`; return; }
 
-  // Timer
+  // Timer continu marche+étape : la barre reste proportionnelle au temps total
+  // « Étape » (sinon elle repartait à 100 % au passage marche→étape).
+  const dureeMarcheMs = (bloc.dureeMarche ?? 300) * 1000;
+  const etapeDurMsTimer = sched.phaseEnd - sched.phaseStart;
   const endsAt = sched.phaseEnd;
-  const dur = (endsAt - sched.phaseStart)/1000;
+  const dur = (dureeMarcheMs + etapeDurMsTimer) / 1000;
   const key = 'etape_total_'+currentTeam+'_'+stepIdx;
   startTimer(endsAt, dur, `Étape ${stepIdx+1}`, key);
 
@@ -1457,6 +1460,26 @@ async function syncPhotosFromDB(epreuve) {
   }
 }
 
+let _photoPollTimer = null, _photoPollBloc = -1;
+function startPhotoPolling(epreuve) {
+  if (!isCaptain) return;
+  const cur = (()=>{ const p=getParcours(); const H=gameState?.started_at?new Date(gameState.started_at).getTime():Date.now(); return p.length?computePhaseFromSchedule(H,p).blocIdx:-1; })();
+  if (_photoPollTimer && _photoPollBloc === cur) return;
+  if (_photoPollTimer) { clearInterval(_photoPollTimer); _photoPollTimer = null; }
+  _photoPollBloc = cur;
+  _photoPollTimer = setInterval(() => {
+    // S'arrêter si on n'est plus sur l'épreuve photo de ce bloc
+    const parcours = getParcours();
+    const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+    const sched = parcours.length ? computePhaseFromSchedule(H, parcours) : {phase:null};
+    if (sched.phase !== 'epreuve' || sched.blocIdx !== _photoPollBloc) {
+      clearInterval(_photoPollTimer); _photoPollTimer = null; _photoPollBloc = -1; return;
+    }
+    _lastSyncPhotos = 0; // forcer la resynchro (bypass throttle)
+    syncPhotosFromDB(epreuve);
+  }, 4000);
+}
+
 function renderEpreuvePhoto(epreuve) {
   const state = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
   // state: { ch1: {attempts:[], done:false, points:0}, ch2: ... }
@@ -1466,6 +1489,10 @@ function renderEpreuvePhoto(epreuve) {
 
   // Synchroniser avec la table photos (statuts mis à jour par l'admin)
   syncPhotosFromDB(epreuve);
+  // Poll de secours : le Realtime sur la table photos ne délivre pas toujours les
+  // UPDATE (validation/refus admin). On resynchronise donc régulièrement tant qu'on
+  // est sur l'épreuve photo, pour notifier le joueur quasi en temps réel.
+  startPhotoPolling(epreuve);
 
   // Timing : 5 minutes par challenge
   // Challenge 1 = première moitié du temps, Challenge 2 = seconde moitié
@@ -1528,16 +1555,24 @@ function renderEpreuvePhoto(epreuve) {
     else if(st.done) statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--danger)">✗ ${used>=MAX_AT?'5 essais épuisés':'Temps écoulé'} — 0 point</div>`;
     else if(last?.statut==='refusee') statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--danger)">Photo refusée — essai ${used+1} disponible (max ${POINTS_PHOTO[used]||0} pts)</div>`;
 
+    // Afficher TOUTES les photos déjà envoyées (y compris en attente) pour que le
+    // joueur garde une trace de ce qu'il a soumis et n'envoie pas deux fois la même.
     let photoHtml = '';
-    if(last && last.statut!=='en_attente' && last.id) {
-      // Charger la photo à la demande via son ID (image lazy)
-      const imgId = 'photo_thumb_'+last.id;
-      photoHtml = `<div style="padding:0 14px 10px">
-        <img id="${imgId}" src="" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);min-height:60px">
-        <div style="font-size:12px;font-weight:500;color:${last.statut==='validee'?'var(--success)':'var(--danger)'};margin-top:4px">${last.statut==='validee'?`✓ Validée — +${last.points||0} pts`:'✗ Refusée'}</div>
-      </div>`;
-      // Charger après render
-      setTimeout(() => loadPhotoThumb(last.id, imgId), 0);
+    const envoyees = st.attempts.filter(a => a && a.id);
+    if (envoyees.length) {
+      const vignettes = envoyees.map(a => {
+        const imgId = 'photo_thumb_'+a.id;
+        const lbl = a.statut==='validee' ? `✓ Validée — +${a.points||0} pts`
+                  : a.statut==='refusee' ? '✗ Refusée'
+                  : '⏳ En attente';
+        const col = a.statut==='validee' ? 'var(--success)' : a.statut==='refusee' ? 'var(--danger)' : 'var(--amber)';
+        setTimeout(() => loadPhotoThumb(a.id, imgId), 0);
+        return `<div style="flex:0 0 88px">
+          <img id="${imgId}" src="" style="width:88px;height:88px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream)">
+          <div style="font-size:10px;font-weight:500;color:${col};margin-top:3px;text-align:center">Essai ${st.attempts.indexOf(a)+1}<br>${lbl}</div>
+        </div>`;
+      }).join('');
+      photoHtml = `<div style="display:flex;gap:8px;overflow-x:auto;padding:0 14px 10px">${vignettes}</div>`;
     }
 
     const pts = st.done ? (st.points>0?`+${st.points} pts`:'0 pt') : `max ${POINTS_PHOTO[used]||0} pts`;
