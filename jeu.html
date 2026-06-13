@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-h</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-i</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -1138,7 +1138,11 @@ function epreuveEstComplete(epreuve, rep) {
     const n = (appData.anecdotes||[]).length;
     return n > 0 && Object.keys(rep).filter(k=>!isNaN(k)).length >= n;
   }
-  return false; // villes/frise : on attend la fin du temps imparti
+  if (epreuve.type === 'frise') {
+    const n = (appData.joueursAvecAnecdotes||[]).filter(j=>j.equipe_nom===currentTeam).length;
+    return n > 0 && Object.keys(rep).filter(k=>!isNaN(k)).length >= n;
+  }
+  return false; // villes : on attend la fin du temps imparti
 }
 
 function renderScorePhase(pts, titre, sousTitre, parcours) {
@@ -1600,11 +1604,9 @@ function renderEpreuvePhoto(epreuve) {
   }
 
   const total = (state.ch1.points||0) + (state.ch2.points||0);
-  // Ch2 affiché uniquement quand ch1 terminé
+  // Ch2 affiché uniquement quand ch1 terminé. (Les règles ne sont PAS affichées ici :
+  // elles sont accessibles via « Voir les règles » ajouté par renderEpreuveSchedule.)
   return `
-    <div class="card" style="margin-bottom:10px">
-      <div style="font-size:14px;color:var(--ink-soft);line-height:1.7">${epreuve.instructions||''}</div>
-    </div>
     ${challengeBlock(1, state.ch1, 'Caroline', false)}
     ${ch2Available ? challengeBlock(2, state.ch2, 'Marc', false) : `<div class="card" style="margin-bottom:10px;opacity:.6"><div style="font-size:14px;font-weight:500;margin-bottom:6px">Challenge 2 — Marc</div><div style="font-size:13px;color:var(--ink-muted)">🔒 Disponible après le challenge Caroline</div></div>`}
     <div class="card" style="text-align:center">
