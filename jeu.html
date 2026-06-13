@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-d</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-e</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -909,13 +909,15 @@ function renderEtapeSchedule(sched, parcours) {
   const etape   = appData.etapes.find(e=>String(e.id)===etapeId) || appData.etapes[stepIdx];
   if (!etape) { document.getElementById('teamContent').innerHTML=`<div class="notice">Étape introuvable.</div>`; return; }
 
-  // Timer continu marche+étape : la barre reste proportionnelle au temps total
-  // « Étape » (sinon elle repartait à 100 % au passage marche→étape).
+  // Clé distincte de la marche : le minuteur est ré-initialisé proprement au début
+  // de l'étape (comme pour règles/épreuve) → la coloration orange/rouge fonctionne.
+  // La durée de référence reste marche+étape pour que la barre soit continue
+  // (≈50 % au début de l'étape) et ne reparte pas à 100 %.
   const dureeMarcheMs = (bloc.dureeMarche ?? 300) * 1000;
   const etapeDurMsTimer = sched.phaseEnd - sched.phaseStart;
   const endsAt = sched.phaseEnd;
   const dur = (dureeMarcheMs + etapeDurMsTimer) / 1000;
-  const key = 'etape_total_'+currentTeam+'_'+stepIdx;
+  const key = 'etape_phase_'+currentTeam+'_'+stepIdx;
   startTimer(endsAt, dur, `Étape ${stepIdx+1}`, key);
 
   const mult = gameState?.time_multiplier || 1;
@@ -1357,9 +1359,6 @@ async function loadPhotoThumb(photoId, imgElId) {
 }
 
 let _lastSyncPhotos = 0;
-// Mémorise les photos déjà notifiées (id → statut) pour éviter de re-jouer le toast/son
-// à chaque resynchronisation. Robuste même si l'état local est ré-écrasé par un écho.
-const _photoNotified = new Map();
 async function syncPhotosFromDB(epreuve) {
   if (!isCaptain) return;
   // Throttle : ne pas appeler plus d'une fois par 2 secondes (le Realtime gère la fraîcheur)
@@ -1421,25 +1420,8 @@ async function syncPhotosFromDB(epreuve) {
   const oldStr = JSON.stringify(oldState);
   const newStr = JSON.stringify(state);
 
-  // Notifier le joueur (toast + son) à CHAQUE photo qui passe en validée/refusée,
-  // une seule fois par photo (via _photoNotified). Indépendant de oldStr/newStr pour
-  // ne jamais boucler même si l'état local est ré-écrasé par un écho Realtime.
-  ['ch1','ch2'].forEach((k, ci) => {
-    (state[k].attempts || []).forEach(a => {
-      if (!a || !a.id) return;
-      if (a.statut !== 'refusee' && a.statut !== 'validee') return;
-      if (_photoNotified.get(a.id) === a.statut) return;
-      _photoNotified.set(a.id, a.statut);
-      if (a.statut === 'refusee') {
-        showToast({icon:'❌', title:'Photo refusée', msg:`Challenge ${ci===0?'Caroline':'Marc'} — vous pouvez soumettre un nouvel essai`, type:'danger', duration:9000});
-        try { playJpSound(false); } catch(e) {}
-      } else {
-        showToast({icon:'✅', title:`Photo validée — +${a.points||0} pts`, msg:`Challenge ${ci===0?'Caroline':'Marc'}`, type:'success', duration:7000});
-        try { playJpSound(true); } catch(e) {}
-      }
-    });
-  });
-
+  // Pas de pop-up : l'affichage des vignettes et de leur statut suffit. On se contente
+  // de réaligner l'état local + base et de re-render quand quelque chose a changé.
   if (oldStr !== newStr) {
     if (oldState.ch1?.done && !state.ch1.done) state.ch1.done = true;
     if (oldState.ch2?.done && !state.ch2.done) state.ch2.done = true;
@@ -1460,8 +1442,23 @@ async function syncPhotosFromDB(epreuve) {
   }
 }
 
+// Quand l'appli redevient visible (retour après la prise de photo sur mobile, qui met
+// l'onglet en arrière-plan et gèle les timers), forcer une resynchro immédiate. C'était
+// la cause du « il faut rafraîchir » sur la 1re photo.
+let _visibilityHooked = false;
+function hookPhotoVisibility() {
+  if (_visibilityHooked) return;
+  _visibilityHooked = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    _lastSyncPhotos = 0;
+    renderTeamView();
+  });
+}
+
 let _photoPollTimer = null, _photoPollBloc = -1;
 function startPhotoPolling(epreuve) {
+  hookPhotoVisibility();
   if (!isCaptain) return;
   const cur = (()=>{ const p=getParcours(); const H=gameState?.started_at?new Date(gameState.started_at).getTime():Date.now(); return p.length?computePhaseFromSchedule(H,p).blocIdx:-1; })();
   if (_photoPollTimer && _photoPollBloc === cur) return;
