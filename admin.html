@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-n</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-o</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -369,9 +369,7 @@ input[type=file]{display:none}
   <div id="aJdp" class="page">
     <div class="nav-tabs" style="margin:-16px -0px 16px;border-radius:0">
       <button class="nav-tab active" onclick="jdpTab('controle',this)">🎮 Contrôle</button>
-      <button class="nav-tab" onclick="jdpTab('suivi',this)">📍 Suivi</button>
-      <button class="nav-tab" onclick="jdpTab('scoring',this)">⚙️ Scoring</button>
-      <button class="nav-tab" onclick="jdpTab('scores',this)">🏆 Scores</button>
+      <button class="nav-tab" onclick="jdpTab('suivi',this)">📊 Équipes &amp; scores</button>
     </div>
 
     <!-- Contrôle -->
@@ -908,7 +906,7 @@ function setAppNavTabs(role){
   if(role==='gm'){
     if(titleEl) titleEl.textContent='Game Master';
     el.innerHTML=`
-      <button class="nav-tab active" onclick="adminTab('jdp',this)">🎮 Jeu de piste</button>
+      <button class="nav-tab active" onclick="adminTab('jdp',this)">🎮 Jeu</button>
       <button class="nav-tab" onclick="adminTab('photos',this)">📸 Photos <span class="notif-badge" id="adminPhotoBadge">0</span></button>`;
   } else {
     if(titleEl) titleEl.textContent='Administration';
@@ -3017,21 +3015,25 @@ async function confirmReset(){
     })));
   }
 
-  // 3. Archive ALL scores (toutes les épreuves) + classement
-  const {data:scores}=await db.from('scores').select('*');
-  if(scores?.length){
-    await db.from('scores_archive').insert(scores.map(s=>{
-      const ep=appData.epreuves.find(e=>e.id===s.epreuve_id);
-      return {
-        equipe_nom:s.equipe_nom,
-        epreuve_id:s.epreuve_id,
-        epreuve_titre:ep?ep.title:'Épreuve '+s.epreuve_id,
-        score:s.score||0,
-        archive_label:label,
-        archived_at:now
-      };
-    }));
-  }
+  // 3. Archive des scores du JEU DE PISTE (source de vérité : jp_team_states)
+  //    Une ligne scores_archive par étape et par épreuve de chaque équipe.
+  const {data:tsRows}=await db.from('jp_team_states').select('equipe_nom,parcours,scores_etapes,total_score');
+  const jdpArchiveRows=[];
+  (tsRows||[]).forEach(ts=>{
+    const sc=jdpTeamScores(ts);
+    const parcours=jdpTeamParcours(ts,ts.equipe_nom);
+    parcours.forEach((bloc,i)=>{
+      const et=appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
+      const ep=et?.epreuveId?appData.epreuves.find(e=>String(e.id)===String(et.epreuveId)):(bloc.epreuveId?appData.epreuves.find(e=>String(e.id)===String(bloc.epreuveId)):null);
+      if(sc['etape_'+i]!==undefined){
+        jdpArchiveRows.push({equipe_nom:ts.equipe_nom,epreuve_id:i*2,epreuve_titre:`É${i+1} · ${et?.nom||'Étape'}`,score:sc['etape_'+i]||0,archive_label:label,archived_at:now});
+      }
+      if(ep && sc['ep_'+i]!==undefined){
+        jdpArchiveRows.push({equipe_nom:ts.equipe_nom,epreuve_id:i*2+1,epreuve_titre:`Ép${i+1} · ${ep.title||'Épreuve'}`,score:sc['ep_'+i]||0,archive_label:label,archived_at:now});
+      }
+    });
+  });
+  if(jdpArchiveRows.length) await db.from('scores_archive').insert(jdpArchiveRows);
 
   // 4. Re-label __live__ detail records with the real archive label
   await db.from('reponses_detail_archive')
@@ -3987,8 +3989,6 @@ function jdpTab(name,btn) {
   btn.classList.add('active');
   if(name==='controle') renderJdpControle();
   if(name==='suivi')    renderJdpSuivi();
-  if(name==='scoring')  renderJdpScoring();
-  if(name==='scores')   renderJdpScores();
 }
 
 // ---- Contrôle ----
@@ -4013,14 +4013,13 @@ function renderJdpControle() {
       <option value="60">×60 — 1h en 1min</option>
     </select>
   </label>
-  <button class="btn btn-sm" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>
 </div>`;
   } else if(s==='active'){
     statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--success-bg);color:var(--success);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">🟢 En cours — T+${elapsed} min</div><p style="font-size:13px;color:var(--ink-muted)">Démarré à ${jdpData.gameState.started_at?new Date(jdpData.gameState.started_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'-'}</p>`;
-    actEl.innerHTML=`<button class="btn btn-danger btn-sm" onclick="jdpStopGame()">⏹ Arrêter</button><button class="btn btn-sm" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>`;
+    actEl.innerHTML=`<button class="btn btn-danger" onclick="jdpStopGame()">⏹ Terminer le jeu</button>`;
   } else {
-    statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--success-bg);color:var(--success);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">✅ Terminé</div>`;
-    actEl.innerHTML=`<button class="btn btn-sm" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>`;
+    statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--info-bg);color:var(--info);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">✅ Jeu terminé</div><p style="font-size:13px;color:var(--ink-muted)">Archivez la partie pour pouvoir relancer un nouveau jeu.</p>`;
+    actEl.innerHTML=`<button class="btn btn-gold" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>`;
   }
   const ov=document.getElementById('jdpTeamOverview');
   if(!ov) return;
@@ -4088,7 +4087,7 @@ async function jdpStartGame(){
 }
 
 async function jdpStopGame(){
-  if(!confirm('Arrêter le jeu ?')) return;
+  if(!confirm('Terminer le jeu ? Les équipes ne pourront plus jouer.')) return;
   jdpData.gameState={...jdpData.gameState,status:'done'};
   await db.from('jp_game_state').update({status:'done'}).eq('id',1);
   renderJdpControle();
@@ -4109,34 +4108,73 @@ async function jdpResetGame(){
   showToast({icon:'🔄',title:'Jeu de piste réinitialisé',msg:'États et photos remis à zéro.',duration:3000});
 }
 
-// ---- Suivi ----
+// ---- Suivi & scores (fusionnés) ----
+// scores_etapes est désormais un OBJET { etape_0:.., ep_0:.., etape_1:.. }
+function jdpTeamScores(ts){
+  let raw=ts?.scores_etapes;
+  if(!raw) return {};
+  if(typeof raw==='string'){ try{raw=JSON.parse(raw);}catch(e){return {};} }
+  if(Array.isArray(raw)) return {};
+  return (typeof raw==='object'&&raw)?raw:{};
+}
+function jdpTeamParcours(ts,team){
+  let p=[]; try{p=JSON.parse(ts?.parcours||'[]');}catch(e){p=[];}
+  if(!p.length) p=appData.jdpOrdre[team]||[];
+  return (p||[]).map(b=> typeof b==='object'?b:{delai:0,etapeId:b,epreuveId:null});
+}
+
 function renderJdpSuivi(){
   const el=document.getElementById('jdpSuiviContent');
   if(!el) return;
+
+  const cellHtml=(c)=>{
+    const bg=c.filled?(c.kind==='etape'?'#1E4A5A':'#1E3A4A'):'transparent';
+    const bdr=c.filled?bg:'var(--border)';
+    const col=c.filled?'#fff':'var(--ink-muted)';
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:0 0 56px;width:56px">
+      <div style="font-size:9px;line-height:1.15;color:var(--ink-muted);height:24px;overflow:hidden;text-align:center;margin-bottom:2px">${c.label}</div>
+      <div style="width:30px;height:30px;border-radius:4px;background:${bg};border:2px solid ${bdr};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${col}">${c.val}</div>
+    </div>`;
+  };
+
   el.innerHTML=appData.teams.map(t=>{
     const ts=jdpData.teamStates[t];
+    const sc=jdpTeamScores(ts);
+    const parcours=jdpTeamParcours(ts,t);
     const step=ts?.step_idx??-1;
     const phase=ts?.phase||'waiting';
-    let parcours; try{parcours=JSON.parse(ts?.parcours||'[]');}catch(e){parcours=[];}
-    if(!parcours.length) parcours=jdpData.lieux.map((_,i)=>i);
-    const nb=parcours.length;
-    const dots=parcours.map((_,i)=>{
-      return`<div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;border:2px solid ${i<step?'var(--success)':i===step?'var(--gold)':'var(--border)'};color:${i<step?'var(--success)':i===step?'var(--gold-dark)':'var(--ink-muted)'};background:${i<step?'var(--success-bg)':i===step?'var(--gold-light)':'var(--cream)'}">${i+1}</div>${i<nb-1?`<div style="flex:1;height:2px;background:${i<step?'var(--success)':'var(--border)'};border-radius:1px"></div>`:''}`;
-    }).join('');
-    const scores=ts?.scores_etapes||[];
-    const elapsed=ts?.started_step_at?Math.floor((Date.now()-new Date(ts.started_step_at))/60000):0;
-    return`<div class="card">
+
+    let total=0;
+    const cells=[];
+    parcours.forEach((bloc,i)=>{
+      const et=appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
+      const ep=et?.epreuveId?appData.epreuves.find(e=>String(e.id)===String(et.epreuveId)):(bloc.epreuveId?appData.epreuves.find(e=>String(e.id)===String(bloc.epreuveId)):null);
+      const etScore=sc['etape_'+i];
+      const hasEt=etScore!==undefined&&etScore!==null;
+      if(hasEt) total+=etScore||0;
+      cells.push({label:'É'+(i+1)+(et?.nom?'<br>'+et.nom:''), val:hasEt?etScore:'', filled:hasEt, kind:'etape'});
+      if(ep){
+        const epScore=sc['ep_'+i];
+        const hasEp=epScore!==undefined&&epScore!==null;
+        if(hasEp) total+=epScore||0;
+        cells.push({label:(ep.title||('Ép'+(i+1))), val:hasEp?epScore:'', filled:hasEp, kind:'epreuve'});
+      }
+    });
+
+    // Quinconce : carrés pairs sur la 1re ligne, impairs sur la 2e ligne décalée
+    const row1=cells.filter((_,i)=>i%2===0).map(cellHtml).join('');
+    const row2=cells.filter((_,i)=>i%2===1).map(cellHtml).join('');
+    const phaseTxt = phase==='done'?'Terminé':(phase==='waiting'?'En attente':`Étape ${step+1} · ${jdpPhaseLabel(phase)}`);
+
+    return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span style="font-size:15px;font-weight:500">${t}</span>
-        <span style="font-size:13px;font-weight:500;color:var(--gold-dark)">${ts?.total_score||0} pts</span>
+        <div><span style="font-size:15px;font-weight:600">${t}</span> <span style="font-size:12px;color:var(--ink-muted)">· ${phaseTxt}</span></div>
+        <span style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark)">${total} <span style="font-size:11px;color:var(--ink-muted);font-weight:500">pts</span></span>
       </div>
-      <div style="display:flex;gap:3px;align-items:center;margin-bottom:10px">${dots}</div>
-      <div style="font-size:12px;color:var(--ink-muted);line-height:1.6">
-        Phase : <strong>${jdpPhaseLabel(phase)}</strong>
-        ${step>=0?` · Étape ${step+1} depuis ${elapsed} min`:''}
-        · Indices : ${ts?.indices_demandes||0} · Score étape : <strong>${ts?.score_etape??jdpData.scoring.score_depart}</strong> pts
+      <div style="overflow-x:auto">
+        <div style="display:flex;gap:6px;margin-bottom:4px">${row1}</div>
+        <div style="display:flex;gap:6px;margin-left:31px">${row2}</div>
       </div>
-      ${scores.length?`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${scores.map((s,i)=>`<span style="font-size:12px;background:var(--cream);border-radius:4px;padding:2px 8px;color:var(--ink-muted)">É${i+1}:<strong style="color:var(--gold-dark)">${s??'—'}</strong></span>`).join('')}</div>`:''}
     </div>`;
   }).join('')||'<div class="notice">Aucune équipe.</div>';
 }
