@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-m</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-n</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -241,19 +241,15 @@ input[type=file]{display:none}
       </svg>
     </div>
     <h1 class="login-title"><span style="font-family:'Dancing Script',cursive;font-size:32px;font-weight:600">Caroline & Marc</span></h1>
-    <p class="login-sub">Chasse au trésor · 5 septembre 2026<br>Villa 180° Mer · L'Houmeau</p>
+    <p class="login-sub">5 septembre 2026<br>Villa 180° Mer · L'Houmeau</p>
     <div class="role-cards">
       <div class="role-card" id="roleAdmin" onclick="selectRole('admin')">
         <div class="role-icon">⚙️</div>
-        <div><div class="role-card-title">Administrateur</div><div class="role-card-desc">Configurer, valider les photos, scores</div></div>
+        <div><div class="role-card-title">Administrateur</div><div class="role-card-desc">Configurer épreuves, équipes, énigmes, quiz, joueurs · archives</div></div>
       </div>
       <div class="role-card" id="roleGM" onclick="selectRole('gm')">
         <div class="role-icon">🎯</div>
-        <div><div class="role-card-title">Game Master</div><div class="role-card-desc">Gérer votre épreuve</div></div>
-      </div>
-      <div class="role-card" id="rolePlayer" onclick="enterPlayerMode()">
-        <div class="role-icon">👥</div>
-        <div><div class="role-card-title">Mode Joueur</div><div class="role-card-desc">Voir les équipes et participants</div></div>
+        <div><div class="role-card-title">Game Master</div><div class="role-card-desc">Démarrer/arrêter le jeu, suivre les équipes, valider les photos</div></div>
       </div>
     </div>
     <div class="field" style="width:100%">
@@ -269,7 +265,7 @@ input[type=file]{display:none}
 <div id="adminApp" style="display:none">
   <div class="app-header">
     <div>
-      <div class="app-header-title">Administration <span class="sync-indicator"><span class="sync-dot"></span>Live</span></div>
+      <div class="app-header-title"><span id="appRoleTitle">Administration</span> <span class="sync-indicator"><span class="sync-dot"></span>Live</span></div>
       <div class="app-header-sub">Caroline & Marc · 5 sept. 2026</div>
     </div>
     <button class="logout-btn" onclick="logout()">Quitter</button>
@@ -347,7 +343,7 @@ input[type=file]{display:none}
   <div id="aConfig" class="page">
     <div class="card">
       <div class="card-title">Codes PIN</div>
-      <div class="notice">Chaque game master a son propre code lié à son épreuve.</div>
+      <div class="notice">Un code pour l'Administrateur (configuration) et un code pour le Game Master (déroulé du jeu, photos).</div>
       <div id="pinConfigFields"></div>
       <button class="btn btn-gold" onclick="savePins()">Enregistrer les codes</button>
       <span class="save-msg" id="pinSaveMsg">Sauvegardé ✓</span>
@@ -513,8 +509,8 @@ input[type=file]{display:none}
 <!-- MODALS -->
 <div class="modal-backdrop" id="resetModal">
   <div class="modal">
-    <div class="modal-title">Réinitialiser</div>
-    <div class="modal-desc">Les scores seront remis à zéro. Les photos seront archivées.</div>
+    <div class="modal-title">Archiver &amp; réinitialiser</div>
+    <div class="modal-desc">La partie en cours (scores, photos, réponses) est archivée, puis le jeu de piste est entièrement remis à zéro (équipes en attente).</div>
     <div class="field" style="text-align:left;margin-bottom:1rem">
       <div class="field-label">Nom de la session</div>
       <input type="text" id="archiveLabel" placeholder="ex: Test du 1er août" style="font-size:14px">
@@ -579,7 +575,7 @@ let epDirty = {}; // épreuves modifiées non sauvegardées
 let epEdits = {}; // valeurs en attente { title, instructions, scoring, max_score, duree, dureeRegles }
 let challengeState={};
 let appData={teams:[],epreuves:[],scores:{},questions:{},joueurs:[],villesBac:{},anecdotes:[],jdpEpreuves:{},jdpOrdre:{},etapes:[],capitaines:{}};
-let pins={admin:'1234',gm:{1:'5678',2:'5679',3:'5680',4:'5681'}};
+let pins={admin:'1234',gm:'5678'};
 
 // ===================== SESSION =====================
 function saveSession(){
@@ -660,10 +656,9 @@ async function init(){
     ];
     configRows.forEach(r=>{
       if(r.key==='pin_admin') pins.admin=r.value;
-      if(r.key==='pin_gm_1') pins.gm[1]=r.value;
-      if(r.key==='pin_gm_2') pins.gm[2]=r.value;
-      if(r.key==='pin_gm_3') pins.gm[3]=r.value;
-      if(r.key==='pin_gm_4') pins.gm[4]=r.value;
+      if(r.key==='pin_gm') pins.gm=r.value;
+      // Compat ancienne config : reprendre le premier code GM s'il n'y a pas de pin_gm
+      else if(r.key==='pin_gm_1' && !configRows.some(x=>x.key==='pin_gm')) pins.gm=r.value;
     });
     appData.teams.forEach(t=>{challengeState[t]={1:{attempts:[],done:false,points:0},2:{attempts:[],done:false,points:0}};});
     await loadChallengeState();
@@ -694,15 +689,9 @@ async function init(){
   },8000);
 
   const session=loadSession();
-  if(session?.role){
-    currentRole=session.role; currentGMStation=session.station||null;
-    if(currentRole==='admin') enterAdmin();
-    else if(currentRole==='gm'&&currentGMStation) enterGM();
-    else if(currentRole==='player') enterPlayerMode();
-    else document.getElementById('loginScreen').style.display='block';
-  } else {
-    document.getElementById('loginScreen').style.display='block';
-  }
+  if(session?.role==='admin') enterAdmin();
+  else if(session?.role==='gm') enterGM();
+  else document.getElementById('loginScreen').style.display='block';
 }
 
 async function loadChallengeState(){
@@ -763,33 +752,24 @@ function subscribeRealtime(){
   db.channel('photos-insert-'+currentRole+'-'+_rtTs).on('postgres_changes',{event:'INSERT',schema:'public',table:'photos'},async payload=>{
     const p=payload.new;
     console.log('[admin] INSERT photo reçu:', p);
-    if(currentRole==='admin'){
+    if(currentRole==='gm'){
+      // C'est le Game Master qui valide/rejette les photos
       pendingPhotoCount++;updateAdminPhotoBadge();
       _lastPendingSeen=pendingPhotoCount;
       showAdminPhotoToast(p);
       renderAdminPhotos();
       refreshAdminPhotoBadge();
     }
-    if(currentRole==='gm'&&p.epreuve_id===currentGMStation){
-      // Reload full challenge state to ensure dots are accurate
-      await loadChallengeState();
-      if(currentPhotoTeam) renderPhotoChallengeUI(currentPhotoTeam);
-    }
   }).subscribe();
 
   db.channel('photos-update-'+currentRole+'-'+_rtTs).on('postgres_changes',{event:'UPDATE',schema:'public',table:'photos'},async payload=>{
-    const p=payload.new;
-    if(currentRole==='gm'&&p.epreuve_id===currentGMStation){
-      await loadChallengeState();
-      handlePhotoStatusUpdateGM(p);
-    }
-    if(currentRole==='admin'){renderAdminPhotos();renderAdminScores();renderLeaderboard('adminLeaderboard');refreshAdminPhotoBadge();}
+    if(currentRole==='gm'){renderAdminPhotos();refreshAdminPhotoBadge();}
   }).subscribe();
 
   db.channel('config-live-'+currentRole+'-'+_rtTs).on('postgres_changes',{event:'UPDATE',schema:'public',table:'config'},payload=>{
     const r=payload.new;
     if(r.key==='pin_admin') pins.admin=r.value;
-    if(r.key.startsWith('pin_gm_')) pins.gm[parseInt(r.key.slice(-1))]=r.value;
+    if(r.key==='pin_gm') pins.gm=r.value;
   }).subscribe();
 }
 
@@ -839,6 +819,7 @@ function playPhotoNotificationSound() {
 }
 function updateAdminPhotoBadge(){
   const b=document.getElementById('adminPhotoBadge');
+  if(!b) return; // le repère n'existe que dans la barre du Game Master
   pendingPhotoCount>0?(b.textContent=pendingPhotoCount,b.classList.add('visible')):b.classList.remove('visible');
 }
 // Recalcule le nombre de photos en attente depuis la base (source de vérité) et
@@ -855,7 +836,7 @@ async function refreshAdminPhotoBadge(){
 // les nouvelles photos en attente (repère + son).
 let _adminPhotoPoll=null,_lastPendingSeen=0;
 async function pollAdminPhotos(){
-  if(currentRole!=='admin') return;
+  if(currentRole!=='gm') return;
   try{
     const {data}=await db.from('photos').select('id').eq('statut','en_attente');
     const n=(data||[]).length;
@@ -895,7 +876,6 @@ function showPointsPop(pts){
 function selectRole(r){
   document.getElementById('roleAdmin').classList.toggle('selected',r==='admin');
   document.getElementById('roleGM').classList.toggle('selected',r==='gm');
-  document.getElementById('rolePlayer').classList.remove('selected');
   currentRole=r;
 }
 
@@ -904,9 +884,7 @@ async function doLogin(){
   const err=document.getElementById('loginErr');
   err.style.display='none';
   if(pin===pins.admin){currentRole='admin';enterAdmin();saveSession();return;}
-  for(let i=1;i<=4;i++){
-    if(pin===pins.gm[i]){currentRole='gm';currentGMStation=i;enterGM();saveSession();return;}
-  }
+  if(pin===pins.gm){currentRole='gm';enterGM();saveSession();return;}
   err.style.display='block';
 }
 
@@ -923,22 +901,57 @@ window.addEventListener('beforeunload', () => {
   try { cleanupChannels(); } catch(e) {}
 });
 
+// Barre de navigation selon le rôle. Les deux rôles partagent le conteneur #adminApp.
+function setAppNavTabs(role){
+  const el=document.getElementById('adminNavTabs');
+  const titleEl=document.getElementById('appRoleTitle');
+  if(role==='gm'){
+    if(titleEl) titleEl.textContent='Game Master';
+    el.innerHTML=`
+      <button class="nav-tab active" onclick="adminTab('jdp',this)">🎮 Jeu de piste</button>
+      <button class="nav-tab" onclick="adminTab('photos',this)">📸 Photos <span class="notif-badge" id="adminPhotoBadge">0</span></button>`;
+  } else {
+    if(titleEl) titleEl.textContent='Administration';
+    el.innerHTML=`
+      <button class="nav-tab active" onclick="adminTab('equipes',this)">Équipes</button>
+      <button class="nav-tab" onclick="adminTab('joueurs',this)">Joueurs</button>
+      <button class="nav-tab" onclick="adminTab('epreuves',this)">Épreuves</button>
+      <button class="nav-tab" onclick="adminTab('etapes',this)">🧭 Étapes</button>
+      <button class="nav-tab" onclick="adminTab('config',this)">Codes</button>
+      <button class="nav-tab" onclick="adminTab('archive',this)">Archives</button>`;
+  }
+}
+
+function showAppPage(pageId){
+  document.querySelectorAll('#adminApp .page').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById(pageId);
+  if(el) el.classList.add('active');
+}
+
 async function enterAdmin(){
+  currentRole='admin';
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('adminApp').style.display='block';
+  setAppNavTabs('admin');
   subscribeRealtime();
+  renderAdminEpreuves();renderTeamFields();renderJoueurs();renderPinConfig();renderEtapesTabs();
+  showAppPage('aEquipes');
+}
+
+async function enterGM(){
+  currentRole='gm';
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('adminApp').style.display='block';
+  setAppNavTabs('gm');
+  subscribeRealtime();
+  // Repère + son photos (le GM valide les photos)
   const {data:pending}=await db.from('photos').select('id').eq('statut','en_attente');
   pendingPhotoCount=(pending||[]).length;_lastPendingSeen=pendingPhotoCount;updateAdminPhotoBadge();
   if(_adminPhotoPoll) clearInterval(_adminPhotoPoll);
   _adminPhotoPoll=setInterval(pollAdminPhotos,5000);
-  renderAdminEpreuves();renderTeamFields();renderJoueurs();renderPinConfig();renderAdminScores();renderAdminPhotos();renderLeaderboard('adminLeaderboard');
-}
-
-function enterGM(){
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('gmApp').style.display='block';
-  subscribeRealtime();
-  setupGMInterface();
+  showAppPage('aJdp');
+  renderJdpControle();
+  renderAdminPhotos();
 }
 
 function setupGMInterface(){
@@ -1008,11 +1021,11 @@ function logout(){
   currentRole=null;currentGMStation=null;currentGMTeam=null;currentPhotoTeam=null;
   pendingPhotoCount=0;gmRefusedCount=0;_lastPendingSeen=0;
   if(_adminPhotoPoll){clearInterval(_adminPhotoPoll);_adminPhotoPoll=null;}
-  ['adminApp','gmApp','playerApp'].forEach(id=>document.getElementById(id).style.display='none');
+  ['adminApp','gmApp','playerApp'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   document.getElementById('loginScreen').style.display='block';
   document.getElementById('pinInput').value='';
   document.getElementById('loginErr').style.display='none';
-  ['roleAdmin','roleGM','rolePlayer'].forEach(id=>document.getElementById(id).classList.remove('selected'));
+  ['roleAdmin','roleGM'].forEach(id=>{const e=document.getElementById(id);if(e)e.classList.remove('selected');});
 }
 
 // ===================== NAV =====================
@@ -1048,17 +1061,16 @@ function gmTab(name,btn){
 
 // ===================== PIN CONFIG =====================
 function renderPinConfig(){
-  const ep=id=>appData.epreuves.find(e=>e.id===id);
   document.getElementById('pinConfigFields').innerHTML=`
     <div class="pin-config-row"><span class="pin-config-label">Administrateur</span><input class="pin-config-input" type="text" id="pinAdmin" value="${pins.admin}" maxlength="8" inputmode="numeric"></div>
-    ${[1,2,3,4].map(i=>`<div class="pin-config-row"><span class="pin-config-label">GM ${i}${ep(i)?' — '+ep(i).title:''}</span><input class="pin-config-input" type="text" id="pinGm${i}" value="${pins.gm[i]||''}" maxlength="8" inputmode="numeric"></div>`).join('')}`;
+    <div class="pin-config-row"><span class="pin-config-label">Game Master</span><input class="pin-config-input" type="text" id="pinGm" value="${pins.gm}" maxlength="8" inputmode="numeric"></div>`;
 }
 async function savePins(){
   pins.admin=document.getElementById('pinAdmin').value||pins.admin;
-  for(let i=1;i<=4;i++){const v=document.getElementById('pinGm'+i).value;if(v) pins.gm[i]=v;}
+  pins.gm=document.getElementById('pinGm').value||pins.gm;
   await Promise.all([
     db.from('config').upsert({key:'pin_admin',value:pins.admin},{onConflict:'key'}),
-    ...[1,2,3,4].map(i=>db.from('config').upsert({key:'pin_gm_'+i,value:pins.gm[i]},{onConflict:'key'}))
+    db.from('config').upsert({key:'pin_gm',value:pins.gm},{onConflict:'key'})
   ]);
   showSaveMsg('pinSaveMsg');
   showToast({icon:'🔑',title:'Codes PIN mis à jour',duration:3000});
@@ -3031,16 +3043,23 @@ async function confirmReset(){
   await db.from('photos').delete().neq('id',0);
   await db.from('petit_bac_reponses').delete().neq('id',0);
 
-  // 5. Reset local state
+  // 6. Réinitialiser complètement le jeu de piste (états des équipes + état du jeu)
+  await db.from('jp_game_state').upsert({id:1,status:'waiting',started_at:null},{onConflict:'id'});
+  await db.from('jp_team_states').delete().neq('equipe_nom','__none__');
+  jdpData.gameState={id:1,status:'waiting',started_at:null};
+  jdpData.teamStates={};
+
+  // 7. Reset local state
   appData.teams.forEach(t=>{
     appData.epreuves.forEach(e=>{appData.scores[t][e.id]=null;});
     if(appData.locked[t]) appData.locked[t]={};
     challengeState[t]={1:{attempts:[],done:false,points:0},2:{attempts:[],done:false,points:0}};
   });
-  pendingPhotoCount=0;updateAdminPhotoBadge();
+  pendingPhotoCount=0;_lastPendingSeen=0;updateAdminPhotoBadge();
   closeResetModal();document.getElementById('archiveLabel').value='';
-  renderAdminScores();renderAdminPhotos();renderLeaderboard('adminLeaderboard');
-  showToast({icon:'📁',title:`Archivé : "${label}"`,msg:'Scores et réponses archivés, remis à zéro.',type:'gold',duration:5000});
+  if(typeof renderJdpControle==='function') renderJdpControle();
+  if(currentRole==='gm') renderAdminPhotos();
+  showToast({icon:'📁',title:`Archivé : "${label}"`,msg:'Partie archivée et entièrement réinitialisée.',type:'gold',duration:5000});
 }
 
 // ===================== GM: INSTRUCTIONS =====================
@@ -3994,13 +4013,14 @@ function renderJdpControle() {
       <option value="60">×60 — 1h en 1min</option>
     </select>
   </label>
+  <button class="btn btn-sm" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>
 </div>`;
   } else if(s==='active'){
     statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--success-bg);color:var(--success);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">🟢 En cours — T+${elapsed} min</div><p style="font-size:13px;color:var(--ink-muted)">Démarré à ${jdpData.gameState.started_at?new Date(jdpData.gameState.started_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'-'}</p>`;
-    actEl.innerHTML=`<button class="btn btn-danger btn-sm" onclick="jdpStopGame()">⏹ Arrêter</button><button class="btn btn-sm" onclick="jdpResetGame()">🔄 Réinitialiser</button>`;
+    actEl.innerHTML=`<button class="btn btn-danger btn-sm" onclick="jdpStopGame()">⏹ Arrêter</button><button class="btn btn-sm" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>`;
   } else {
     statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--success-bg);color:var(--success);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">✅ Terminé</div>`;
-    actEl.innerHTML=`<button class="btn btn-sm" onclick="jdpResetGame()">🔄 Réinitialiser</button>`;
+    actEl.innerHTML=`<button class="btn btn-sm" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>`;
   }
   const ov=document.getElementById('jdpTeamOverview');
   if(!ov) return;
