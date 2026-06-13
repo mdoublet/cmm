@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-p</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-q</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -368,9 +368,10 @@ input[type=file]{display:none}
   <!-- JEU -->
   <div id="aJdp" class="page">
     <div class="card">
-      <div class="card-title">Contrôle du jeu</div>
-      <div id="jdpGameStatus"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px" id="jdpGameActions"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div id="jdpGameStatus"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap" id="jdpGameActions"></div>
+      </div>
     </div>
     <div id="jdpSuiviContent"></div>
     <!-- Pages héritées (scoring) conservées masquées pour compat -->
@@ -3942,27 +3943,19 @@ function renderJdpControle() {
   const actEl=document.getElementById('jdpGameActions');
   if(!statusEl) return;
   const elapsed=jdpData.gameState?.started_at?Math.floor((Date.now()-new Date(jdpData.gameState.started_at))/60000):0;
+  const heure=jdpData.gameState?.started_at?new Date(jdpData.gameState.started_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+  const pill=(bg,col,txt)=>`<div style="display:inline-flex;align-items:center;gap:8px;background:${bg};color:${col};padding:8px 14px;border-radius:var(--radius-pill);font-size:13px;font-weight:500">${txt}</div>`;
   if(s==='waiting'){
-    statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--amber-bg);color:var(--amber);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">⏸ En attente</div><p style="font-size:13px;color:var(--ink-muted)">Le jeu de piste n'a pas encore démarré.</p>`;
-    actEl.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-  <button class="btn btn-gold" onclick="jdpStartGame()">▶ Démarrer le jeu</button>
-  <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-muted)">
-    ⚡ Vitesse :
-    <select id="timeMultiplier" style="padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--warm-white);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px">
-      <option value="1">×1 — Normal</option>
-      <option value="2">×2</option>
-      <option value="5">×5</option>
-      <option value="10">×10 — Test rapide</option>
-      <option value="20">×20 — Turbo</option>
-      <option value="60">×60 — 1h en 1min</option>
+    statusEl.innerHTML=pill('var(--amber-bg)','var(--amber)','⏸ Jeu non démarré');
+    actEl.innerHTML=`<select id="timeMultiplier" style="padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--warm-white);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px">
+      <option value="1">×1</option><option value="2">×2</option><option value="5">×5</option><option value="10">×10</option><option value="20">×20</option><option value="60">×60</option>
     </select>
-  </label>
-</div>`;
+    <button class="btn btn-gold" onclick="jdpStartGame()">▶ Démarrer</button>`;
   } else if(s==='active'){
-    statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--success-bg);color:var(--success);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">🟢 En cours — T+${elapsed} min</div><p style="font-size:13px;color:var(--ink-muted)">Démarré à ${jdpData.gameState.started_at?new Date(jdpData.gameState.started_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'-'}</p>`;
+    statusEl.innerHTML=pill('var(--success-bg)','var(--success)',`🟢 En cours · ${heure} · T+${elapsed} min`);
     actEl.innerHTML=`<button class="btn btn-danger" onclick="jdpStopGame()">⏹ Terminer le jeu</button>`;
   } else {
-    statusEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--info-bg);color:var(--info);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-bottom:10px">✅ Jeu terminé</div><p style="font-size:13px;color:var(--ink-muted)">Archivez la partie pour pouvoir relancer un nouveau jeu.</p>`;
+    statusEl.innerHTML=pill('var(--info-bg)','var(--info)','✅ Jeu terminé');
     actEl.innerHTML=`<button class="btn btn-gold" onclick="openResetModal()">📁 Archiver &amp; réinitialiser</button>`;
   }
 }
@@ -4050,39 +4043,35 @@ function jdpTeamParcours(ts,team){
   return (p||[]).map(b=> typeof b==='object'?b:{delai:0,etapeId:b,epreuveId:null});
 }
 
-// Statut d'une équipe : connexion / capitaine / avancement
+// Statut d'une équipe → point coloré (rouge=pas commencé, orange=en cours, vert=terminé)
+// + nom du capitaine.
 function jdpTeamStatus(ts){
-  const gs=jdpData.gameState?.status||'waiting';
-  if(gs==='waiting') return {dot:'var(--ink-muted)',txt:'En attente du démarrage'};
-  if(!ts) return {dot:'var(--ink-muted)',txt:'Pas encore connecté'};
-  const phase=ts.phase||'waiting';
-  if(phase==='done') return {dot:'var(--success)',txt:'✅ Jeu terminé'};
-  // Capitaine : élu en base (jp_config) ou calculé depuis les votes
-  let cap=appData.capitaines[ts.equipe_nom]||null;
-  let votesN=0;
-  try{ const v=JSON.parse(ts.votes_capitaine||'{}'); votesN=Object.keys(v).length;
-    if(!cap){ const tally={}; Object.values(v).forEach(x=>tally[x]=(tally[x]||0)+1);
-      const membres=appData.joueurs.filter(j=>j.equipe_nom===ts.equipe_nom).length;
-      const win=Object.entries(tally).find(([_,n])=>n>membres/2); if(win) cap=win[0]; } }catch(e){}
-  // Activité réelle dans l'app (le déroulé des phases est piloté par le temps, pas par
-  // la connexion) : votes, réponses d'épreuve ou scores enregistrés.
-  const hasRep = ts.reponse_epreuve && ts.reponse_epreuve!=='{}' && ts.reponse_epreuve!=='';
-  const hasScore = Object.keys(jdpTeamScores(ts)).length>0;
-  const connecte = votesN>0 || hasRep || hasScore || !!cap;
-  if(cap){
-    const step=ts.step_idx??0;
-    return {dot:'var(--success)',txt:`⚓ ${cap} · Étape ${step+1} · ${jdpPhaseLabel(phase)}`};
+  let cap=ts?appData.capitaines[ts.equipe_nom]:null;
+  let votesN=0, connecte=false;
+  if(ts){
+    try{ const v=JSON.parse(ts.votes_capitaine||'{}'); votesN=Object.keys(v).length;
+      if(!cap){ const tally={}; Object.values(v).forEach(x=>tally[x]=(tally[x]||0)+1);
+        const membres=appData.joueurs.filter(j=>j.equipe_nom===ts.equipe_nom).length;
+        const win=Object.entries(tally).find(([_,n])=>n>membres/2); if(win) cap=win[0]; } }catch(e){}
+    const hasRep = ts.reponse_epreuve && ts.reponse_epreuve!=='{}' && ts.reponse_epreuve!=='';
+    const hasScore = Object.keys(jdpTeamScores(ts)).length>0;
+    connecte = votesN>0 || hasRep || hasScore || !!cap;
   }
-  if(connecte) return {dot:'var(--amber)',txt:`📱 Connecté · élection du capitaine (${votesN} vote${votesN>1?'s':''})`};
-  return {dot:'var(--ink-muted)',txt:'⚪ Application pas encore ouverte'};
+  const gs=jdpData.gameState?.status||'waiting';
+  const phase=ts?.phase||'waiting';
+  let dot;
+  if(phase==='done') dot='var(--success)';           // vert : terminé
+  else if(gs!=='waiting' && connecte) dot='var(--amber)'; // orange : en cours
+  else dot='var(--danger)';                            // rouge : pas commencé
+  return {dot, cap};
 }
 
 function renderJdpSuivi(){
   const el=document.getElementById('jdpSuiviContent');
   if(!el) return;
 
-  const SQ=34; // largeur d'une colonne carré
-  const labelCell=(txt)=>`<div style="flex:0 0 ${SQ}px;width:${SQ}px;font-size:9px;line-height:1.1;color:var(--ink-muted);text-align:center;height:26px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${txt||''}</div>`;
+  const SQ=52; // largeur d'une colonne (assez large pour les libellés)
+  const labelCell=(txt,align)=>`<div style="flex:0 0 ${SQ}px;width:${SQ}px;font-size:9px;line-height:1.15;color:var(--ink-muted);text-align:center;height:24px;overflow:hidden;display:flex;align-items:${align};justify-content:center;padding:0 2px">${txt||''}</div>`;
   const squareCell=(c)=>{
     const bg=c.filled?(c.kind==='etape'?'#1E4A5A':'#1E3A4A'):'transparent';
     const bdr=c.filled?bg:'var(--border)';
@@ -4115,25 +4104,24 @@ function renderJdpSuivi(){
       }
     });
 
-    // Libellés en quinconce : étapes (cellules paires) sur une ligne, épreuves
-    // (cellules impaires) sur la ligne suivante, puis tous les carrés alignés.
-    const lineEtapes  = cells.map(c=>labelCell(c.kind==='etape'?c.label:'')).join('');
-    const lineEpreuves= cells.map(c=>labelCell(c.kind==='epreuve'?c.label:'')).join('');
+    // Étape AU-DESSUS du carré, épreuve EN-DESSOUS (les colonnes alternent).
+    const lineEtapes  = cells.map(c=>labelCell(c.kind==='etape'?c.label:'','flex-end')).join('');
+    const lineEpreuves= cells.map(c=>labelCell(c.kind==='epreuve'?c.label:'','flex-start')).join('');
     const lineSquares = cells.map(squareCell).join('');
+    const titre = `${t}${st.cap?` <span style="font-weight:400;color:var(--ink-muted)">(${st.cap})</span>`:''}`;
 
     return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:9px;height:9px;border-radius:50%;background:${st.dot};flex-shrink:0"></span>
-          <span style="font-size:15px;font-weight:600">${t}</span>
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <span style="width:10px;height:10px;border-radius:50%;background:${st.dot};flex-shrink:0"></span>
+          <span style="font-size:15px;font-weight:600">${titre}</span>
         </div>
-        <span style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark)">${total} <span style="font-size:11px;color:var(--ink-muted);font-weight:500">pts</span></span>
+        <span style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);flex-shrink:0">${total} <span style="font-size:11px;color:var(--ink-muted);font-weight:500">pts</span></span>
       </div>
-      <div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">${st.txt}</div>
       <div style="overflow-x:auto">
         <div style="display:flex">${lineEtapes}</div>
+        <div style="display:flex;margin:2px 0">${lineSquares}</div>
         <div style="display:flex">${lineEpreuves}</div>
-        <div style="display:flex;margin-top:2px">${lineSquares}</div>
       </div>
     </div>`;
   }).join('')||'<div class="notice">Aucune équipe.</div>';
