@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-b</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -232,6 +232,35 @@ function showToast({ icon='ℹ️', title='', msg='', type='', duration=4000 }) 
   el.innerHTML = `<span class="toast-icon">${icon}</span><div class="toast-body"><div class="toast-title">${title}</div>${msg?`<div class="toast-msg">${msg}</div>`:''}</div>`;
   document.getElementById('toastContainer').appendChild(el);
   if (duration) setTimeout(() => el.remove(), duration);
+}
+// Petit bip de notification (validation / refus photo). Nécessite une interaction
+// utilisateur préalable pour débloquer l'AudioContext (géré au 1er clic).
+let _jpAudioCtx = null;
+function getJpAudioContext() {
+  if (!_jpAudioCtx) {
+    try { _jpAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { return null; }
+  }
+  if (_jpAudioCtx.state === 'suspended') _jpAudioCtx.resume();
+  return _jpAudioCtx;
+}
+document.addEventListener('click', () => getJpAudioContext(), {once:true, capture:true});
+function playJpSound(success) {
+  const ctx = getJpAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    if (success) { o.frequency.setValueAtTime(523, now); o.frequency.setValueAtTime(784, now+0.15); }
+    else         { o.frequency.setValueAtTime(440, now); o.frequency.setValueAtTime(330, now+0.15); }
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.3, now+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.5);
+    o.start(now); o.stop(now+0.5);
+  } catch(e) {}
 }
 function fmtTime(secs) {
   const s = Math.max(0, Math.floor(secs));
@@ -1422,6 +1451,26 @@ async function syncPhotosFromDB(epreuve) {
   if (oldStr !== newStr) {
     if (oldState.ch1?.done && !state.ch1.done) state.ch1.done = true;
     if (oldState.ch2?.done && !state.ch2.done) state.ch2.done = true;
+
+    // Détecter les transitions en_attente → validée/refusée pour avertir le joueur
+    // (toast + son) et lui permettre de soumettre un nouvel essai en cas de refus.
+    ['ch1','ch2'].forEach((k, ci) => {
+      const newAtt = state[k].attempts || [];
+      const oldAtt = oldState[k].attempts || [];
+      newAtt.forEach((a, i) => {
+        if (!a) return;
+        const before = oldAtt[i];
+        const wasPending = !before || before.statut === 'en_attente';
+        if (wasPending && a.statut === 'refusee') {
+          showToast({icon:'❌', title:'Photo refusée', msg:`Challenge ${ci===0?'Caroline':'Marc'} — vous pouvez soumettre un nouvel essai`, type:'danger', duration:9000});
+          try { playJpSound(false); } catch(e) {}
+        } else if (wasPending && a.statut === 'validee') {
+          showToast({icon:'✅', title:`Photo validée — +${a.points||0} pts`, msg:`Challenge ${ci===0?'Caroline':'Marc'}`, type:'success', duration:7000});
+          try { playJpSound(true); } catch(e) {}
+        }
+      });
+    });
+
     teamState.reponse_epreuve = JSON.stringify(state);
     // Sauvegarder uniquement le score (pas reponse_epreuve)
     const total = (state.ch1.points||0) + (state.ch2.points||0);
@@ -1429,9 +1478,10 @@ async function syncPhotosFromDB(epreuve) {
     if (total !== currentScore) {
       await saveScore('ep_'+ (teamState.step_idx||0), total);
     }
-    // Re-render uniquement si le state local a vraiment besoin d'être actualisé
-    // Pas d'appel direct à renderTeamView pour éviter les boucles
-    // Le prochain poll ou Realtime déclenchera le render naturellement
+    // Le state local vient de changer (statut admin) → re-render pour que le joueur
+    // voie le refus/validation et le bouton de nouvel essai. _lastSyncPhotos a été
+    // positionné en début de fonction, donc le sync ré-entrant sera ignoré (pas de boucle).
+    renderTeamView();
   }
 }
 
@@ -1950,15 +2000,22 @@ function subscribeRealtime() {
       .on('postgres_changes',{event:'*',schema:'public',table:'jp_team_states',filter:`equipe_nom=eq.${currentTeam}`}, p=>{
         if (!p.new) return;
         // Protection : ne pas écraser si etape_status='done' local mais pas encore en base
+        const sameStep    = (p.new.step_idx ?? -1) === (teamState?.step_idx ?? -1);
         const localDone   = teamState?.etape_status   === 'done' && p.new.etape_status   !== 'done';
         const localEpDone = teamState?.epreuve_status === 'done' && p.new.epreuve_status !== 'done';
         const localShown  = (teamState?.indices_shown||0) >= 6 && (p.new.indices_shown||0) < 6;
-        if (localDone || localEpDone || localShown) {
+        // Indices monotones : un écho Realtime hors-séquence ne doit jamais faire
+        // "reculer" le nombre d'indices déjà affichés sur la même étape, sinon le
+        // dernier indice apparaît puis disparaît (clignotement) et le score se décale.
+        const localMono   = sameStep && (teamState?.indices_shown||0) < 6
+                            && (p.new.indices_shown||0) < (teamState?.indices_shown||0);
+        if (localDone || localEpDone || localShown || localMono) {
           // Fusionner uniquement les champs sûrs (pas les statuts ni indices_shown)
           const safe = {...p.new};
           if (localDone)   { safe.etape_status   = teamState.etape_status;   safe.score_etape = teamState.score_etape; }
           if (localEpDone) { safe.epreuve_status = teamState.epreuve_status; }
           if (localShown)  { safe.indices_shown  = teamState.indices_shown;  }
+          if (localMono)   { safe.indices_shown  = teamState.indices_shown;  safe.score_etape = teamState.score_etape; }
           // Fusionner les scores : prendre le max
           const localScores = getScores();
           const newScores = typeof p.new.scores_etapes === 'object' ? p.new.scores_etapes : {};

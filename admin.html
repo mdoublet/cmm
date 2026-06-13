@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-b</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -765,8 +765,10 @@ function subscribeRealtime(){
     console.log('[admin] INSERT photo reçu:', p);
     if(currentRole==='admin'){
       pendingPhotoCount++;updateAdminPhotoBadge();
+      _lastPendingSeen=pendingPhotoCount;
       showAdminPhotoToast(p);
       renderAdminPhotos();
+      refreshAdminPhotoBadge();
     }
     if(currentRole==='gm'&&p.epreuve_id===currentGMStation){
       // Reload full challenge state to ensure dots are accurate
@@ -781,7 +783,7 @@ function subscribeRealtime(){
       await loadChallengeState();
       handlePhotoStatusUpdateGM(p);
     }
-    if(currentRole==='admin'){renderAdminPhotos();renderAdminScores();renderLeaderboard('adminLeaderboard');}
+    if(currentRole==='admin'){renderAdminPhotos();renderAdminScores();renderLeaderboard('adminLeaderboard');refreshAdminPhotoBadge();}
   }).subscribe();
 
   db.channel('config-live-'+currentRole+'-'+_rtTs).on('postgres_changes',{event:'UPDATE',schema:'public',table:'config'},payload=>{
@@ -838,6 +840,29 @@ function playPhotoNotificationSound() {
 function updateAdminPhotoBadge(){
   const b=document.getElementById('adminPhotoBadge');
   pendingPhotoCount>0?(b.textContent=pendingPhotoCount,b.classList.add('visible')):b.classList.remove('visible');
+}
+// Recalcule le nombre de photos en attente depuis la base (source de vérité) et
+// met à jour le repère sur l'onglet Photos. Fiable même si un événement Realtime
+// a été manqué.
+async function refreshAdminPhotoBadge(){
+  try{
+    const {data}=await db.from('photos').select('id').eq('statut','en_attente');
+    pendingPhotoCount=(data||[]).length;
+  }catch(e){}
+  updateAdminPhotoBadge();
+}
+// Poll de secours : si le Realtime ne délivre pas l'INSERT, on détecte quand même
+// les nouvelles photos en attente (repère + son).
+let _adminPhotoPoll=null,_lastPendingSeen=0;
+async function pollAdminPhotos(){
+  if(currentRole!=='admin') return;
+  try{
+    const {data}=await db.from('photos').select('id').eq('statut','en_attente');
+    const n=(data||[]).length;
+    if(n>_lastPendingSeen){ try{playPhotoNotificationSound();}catch(e){} renderAdminPhotos(); }
+    _lastPendingSeen=n;
+    pendingPhotoCount=n;updateAdminPhotoBadge();
+  }catch(e){}
 }
 function updateGMPhotoBadge(n){
   const b=document.getElementById('gmPhotoBadge');
@@ -903,7 +928,9 @@ async function enterAdmin(){
   document.getElementById('adminApp').style.display='block';
   subscribeRealtime();
   const {data:pending}=await db.from('photos').select('id').eq('statut','en_attente');
-  pendingPhotoCount=(pending||[]).length;updateAdminPhotoBadge();
+  pendingPhotoCount=(pending||[]).length;_lastPendingSeen=pendingPhotoCount;updateAdminPhotoBadge();
+  if(_adminPhotoPoll) clearInterval(_adminPhotoPoll);
+  _adminPhotoPoll=setInterval(pollAdminPhotos,5000);
   renderAdminEpreuves();renderTeamFields();renderJoueurs();renderPinConfig();renderAdminScores();renderAdminPhotos();renderLeaderboard('adminLeaderboard');
 }
 
@@ -979,7 +1006,8 @@ function setupGMInterface(){
 function logout(){
   clearSession();
   currentRole=null;currentGMStation=null;currentGMTeam=null;currentPhotoTeam=null;
-  pendingPhotoCount=0;gmRefusedCount=0;
+  pendingPhotoCount=0;gmRefusedCount=0;_lastPendingSeen=0;
+  if(_adminPhotoPoll){clearInterval(_adminPhotoPoll);_adminPhotoPoll=null;}
   ['adminApp','gmApp','playerApp'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('loginScreen').style.display='block';
   document.getElementById('pinInput').value='';
@@ -994,7 +1022,7 @@ function adminTab(name,btn){
   const map={epreuves:'aEpreuves',etapes:'aEtapes',equipes:'aEquipes',joueurs:'aJoueurs',config:'aConfig',scores:'aScores',photos:'aPhotos',archive:'aArchive',petitbac:'aPetitBac',classement:'aClassement',reset:'aReset',jdp:'aJdp'};
   document.getElementById(map[name]).classList.add('active');btn.classList.add('active');
   if(name==='scores') renderAdminScores();
-  if(name==='photos'){renderAdminPhotos();pendingPhotoCount=0;updateAdminPhotoBadge();}
+  if(name==='photos'){renderAdminPhotos();refreshAdminPhotoBadge();}
   if(name==='archive') renderAdminArchive();
   if(name==='petitbac') renderAdminPetitBac();
   if(name==='classement') renderLeaderboard('adminLeaderboard');
@@ -2204,10 +2232,12 @@ async function adminValidatePhoto(accepted,photoId){
     appData.scores[photo.equipe_nom][1]=total;
     await db.from('scores').upsert({equipe_nom:photo.equipe_nom,epreuve_id:1,score:total,updated_at:new Date().toISOString()},{onConflict:'equipe_nom,epreuve_id'});
   }
-  if(accepted) pendingPhotoCount=Math.max(0,pendingPhotoCount-1);
+  // Une photo traitée (validée OU refusée) n'est plus en attente → décrémenter le repère.
+  pendingPhotoCount=Math.max(0,pendingPhotoCount-1);
+  _lastPendingSeen=pendingPhotoCount;
   updateAdminPhotoBadge();
   showToast({icon:accepted?'✅':'❌',title:accepted?`Validée — ${points} pts`:'Refusée',type:accepted?'success':'danger',duration:3000});
-  renderAdminPhotos();renderAdminScores();renderLeaderboard('adminLeaderboard');
+  renderAdminPhotos();renderAdminScores();renderLeaderboard('adminLeaderboard');refreshAdminPhotoBadge();
 }
 
 async function renderAdminPetitBac(){
