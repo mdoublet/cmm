@@ -19,7 +19,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--cream)}
-body{font-family:'DM Sans',sans-serif;color:var(--ink);min-height:100vh;max-width:480px;margin:0 auto;padding-bottom:80px}
+body{font-family:'DM Sans',sans-serif;color:var(--ink);min-height:100vh;max-width:480px;margin:0 auto;padding-top:24px;padding-bottom:80px}
 
 #globalLoader{position:fixed;inset:0;background:var(--cream);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
 .loader-ring{width:40px;height:40px;border:3px solid var(--gold-light);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionTag" style="position:fixed;top:6px;right:8px;z-index:10000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;color:var(--gold-dark);background:rgba(245,249,251,.85);border:1px solid var(--border);border-radius:12px;padding:2px 8px;pointer-events:none">JEU v2026.06.13</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
