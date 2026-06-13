@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-g</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-h</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -622,6 +622,12 @@ function renderTeamView() {
   </div>
   <div style="display:flex;align-items:flex-end;gap:4px">`;
 
+  const phaseDone = sched.phase === 'done';
+  const curRep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+  // Le total est calculé à partir des cases FINALISÉES affichées → il correspond
+  // toujours exactement à la somme des petits carrés.
+  let totalScore = 0;
+
   parcours.forEach((bloc, i) => {
     const et3   = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
     const ep3   = et3?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(et3.epreuveId)) : null;
@@ -635,21 +641,17 @@ function renderTeamView() {
     const scoreEprFinal = scoresDict['ep_'+i]    ?? (scoresEtapes ? (scoresEtapes[i*2+1]??null) : null);
 
     // ---- CARRÉ ÉTAPE ----
-    const etapeEnCours  = isCurBloc && (sched.phase === 'marche' || sched.phase === 'etape');
     const motcleTrouve  = isCurBloc && (teamState?.indices_shown || 0) >= 6;
-    const etapeTerminee = isPastBloc || motcleTrouve || (isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve'));
+    const etapeEnCours  = isCurBloc && (sched.phase === 'marche' || sched.phase === 'etape') && !motcleTrouve;
+    const etapeTerminee = isPastBloc || phaseDone || motcleTrouve || (isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve'));
 
     let etBg, etBdr, etVal, etStyle;
-    if (etapeTerminee && scoreEpFinal !== null) {
+    if (etapeTerminee) {
+      // Score figé (mot-clé trouvé/temps écoulé). Si absent du dict → 0 (mot-clé raté).
       etBg = '#1E4A5A'; etBdr = '#1E4A5A';
-      etVal = scoreEpFinal;
+      etVal = scoreEpFinal !== null ? scoreEpFinal : 0;
       etStyle = 'font-size:12px;font-weight:700;color:white';
-    } else if (etapeTerminee && isCurBloc) {
-      // Phase règles/épreuve, mot-clé non validé (sinon scoreEpFinal aurait été pris
-      // au-dessus) → 0 pt pour l'étape.
-      etBg = '#1E4A5A'; etBdr = '#1E4A5A';
-      etVal = 0;
-      etStyle = 'font-size:12px;font-weight:700;color:white';
+      totalScore += (etVal || 0);
     } else if (etapeEnCours) {
       etBg = 'transparent'; etBdr = 'var(--border)';
       // Score potentiel en direct = calcul temporel (cohérent avec l'affichage des indices)
@@ -670,25 +672,28 @@ function renderTeamView() {
 
     if (ep3) {
       // ---- CARRÉ ÉPREUVE ----
-      const eprEnCours  = isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve');
-      const eprTerminee = isPastBloc;
+      // Terminée d'office si bloc passé, jeu fini, ou épreuve complétée par anticipation.
+      const eprComplete = isCurBloc && sched.phase === 'epreuve' && epreuveEstComplete(ep3, curRep);
+      const eprTerminee = isPastBloc || phaseDone || eprComplete;
+      const eprEnCours  = !eprTerminee && isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve');
 
       let epBg, epBdr, eprVal, eprStyle;
       if (eprTerminee) {
         epBg = '#1E3A4A'; epBdr = '#1E3A4A';
-        eprVal = scoreEprFinal ?? 0;
+        eprVal = scoreEprFinal ?? (isCurBloc ? calcScoreEpreuve(ep3, curRep) : 0);
         eprStyle = 'font-size:12px;font-weight:700;color:white';
+        totalScore += (eprVal || 0);
       } else if (eprEnCours) {
         epBg = 'transparent'; epBdr = 'var(--border)';
-        const rep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
-        eprVal = calcScoreEpreuve(ep3, rep);
+        eprVal = calcScoreEpreuve(ep3, curRep);
         eprStyle = 'font-size:12px;font-weight:400;font-style:italic;color:#2A6A7A';
       } else {
         epBg = 'transparent'; epBdr = 'var(--border)';
         eprVal = ''; eprStyle = '';
       }
 
-      progressHtml += `<div style="width:6px;height:2px;background:${isPastBloc?'#1E3A4A':'var(--border)'}"></div>`;
+      const lienFini = isPastBloc || phaseDone;
+      progressHtml += `<div style="width:6px;height:2px;background:${lienFini?'#1E3A4A':'var(--border)'}"></div>`;
       progressHtml += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
         <div style="width:30px;height:30px;border-radius:4px;background:${epBg};border:2px solid ${epBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <span style="${eprStyle}">${eprVal}</span>
@@ -696,23 +701,8 @@ function renderTeamView() {
         <div style="font-size:10px;font-weight:500;color:var(--ink-muted);white-space:nowrap">${maxEpr}</div>
       </div>`;
     }
-    if (i < nb-1) progressHtml += `<div style="width:6px;height:2px;background:${isPastBloc?'var(--gold)':'var(--border)'}"></div>`;
+    if (i < nb-1) progressHtml += `<div style="width:6px;height:2px;background:${(isPastBloc||phaseDone)?'var(--gold)':'var(--border)'}"></div>`;
   });
-
-  // Total : blocs strictement passés + bloc courant si status='done'
-  const etapeStat   = teamState?.etape_status   || 'pending';
-  const epreuveStat = teamState?.epreuve_status || 'pending';
-  const totalScore = Object.entries(scoresDict).reduce((acc,[k,v])=>{
-    const m = k.match(/^(etape|ep)_(\d+)$/);
-    if (!m) return acc;
-    const kind = m[1]; const idx = parseInt(m[2]);
-    if (idx < stepIdx) return acc + (v||0);
-    if (idx === stepIdx) {
-      if (kind === 'etape' && etapeStat   === 'done') return acc + (v||0);
-      if (kind === 'ep'    && epreuveStat === 'done') return acc + (v||0);
-    }
-    return acc;
-  }, 0);
   const maxTotal = parcours.reduce((s,b)=>{
     const e2=appData.etapes.find(e=>String(e.id)===String(b.etapeId));
     const ep2=e2?.epreuveId?appData.epreuves.find(ep=>String(ep.id)===String(e2.epreuveId)):null;
@@ -1139,6 +1129,18 @@ function calcScoreEpreuve(epreuve, rep) {
   return 0;
 }
 
+// Une épreuve est « terminée par anticipation » (avant la fin du temps) si le joueur a
+// tout fait : 2 photos validées, ou toutes les questions du quiz répondues.
+function epreuveEstComplete(epreuve, rep) {
+  if (!epreuve || !rep) return false;
+  if (epreuve.type === 'photos') return !!(rep.ch1?.done && rep.ch2?.done);
+  if (epreuve.type === 'qcm') {
+    const n = (appData.anecdotes||[]).length;
+    return n > 0 && Object.keys(rep).filter(k=>!isNaN(k)).length >= n;
+  }
+  return false; // villes/frise : on attend la fin du temps imparti
+}
+
 function renderScorePhase(pts, titre, sousTitre, parcours) {
   stopTimer();
   // Ne pas modifier scoresEtapes ici — c'est le rôle de terminerEpreuve
@@ -1223,9 +1225,10 @@ async function validerMotcle() {
     total_score: totalLocal,
   });
 
-  // 2. Afficher l'écran de félicitations immédiatement
+  // 2. Re-render complet : met à jour la barre de progression (carré étape en bleu-gris
+  //    + total) ET affiche l'écran de félicitations (dispatch via etape_status='done').
   renderBloqueUntil = Date.now() + 3000;
-  renderAttenteFinEtape(scoreEtape, stepIdx, parcours);
+  renderTeamView();
 
   // 3. Sauvegarder TOUT en une seule requête atomique pour éviter les race conditions
   const scoresFinaux = {...scoresLocal};
@@ -1932,10 +1935,13 @@ async function terminerEpreuve(scoreEpreuve, forceStepIdx) {
 function renderDone() {
   stopTimer();
   document.getElementById('timerBand').style.display='none';
+  // Total recalculé depuis le dict des scores → cohérent avec la somme des petits carrés.
+  const sc = getScores();
+  const total = Object.entries(sc).reduce((acc,[k,v])=>/^(?:etape|ep)_\d+$/.test(k)?acc+(v||0):acc, 0);
   document.getElementById('teamContent').innerHTML = `
     <div class="done-block">
       <div style="font-size:48px;margin-bottom:16px">🎉</div>
-      <div class="done-score">${teamState?.total_score||0}</div>
+      <div class="done-score">${total}</div>
       <div style="font-size:14px;color:var(--ink-muted);margin-top:8px">points · toutes étapes terminées !</div>
     </div>`;
 }
