@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-t</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-u</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -1174,6 +1174,7 @@ function renderScorePhase(pts, titre, sousTitre, parcours) {
 
 async function validerMotcle() {
   if (!isCaptain) return;
+  if (gameState?.status !== 'active') return;
   const input = document.getElementById('motcleInput');
   const errEl = document.getElementById('motcleErr');
   if (!input) { console.warn('motcleInput introuvable'); return; }
@@ -1370,6 +1371,7 @@ async function loadPhotoThumb(photoId, imgElId) {
 let _lastSyncPhotos = 0;
 async function syncPhotosFromDB(epreuve) {
   if (!isCaptain) return;
+  if (gameState?.status !== 'active') return;
   // Throttle : ne pas appeler plus d'une fois par 2 secondes (le Realtime gère la fraîcheur)
   const now = Date.now();
   if (now - _lastSyncPhotos < 2000) return;
@@ -1617,6 +1619,7 @@ function renderEpreuvePhoto(epreuve) {
 
 async function soumettrePhoto(chNum, input) {
   if (!isCaptain || !input.files[0]) return;
+  if (gameState?.status !== 'active') return;
   const reader = new FileReader();
   reader.onload = async e => {
     const state = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
@@ -1891,6 +1894,7 @@ async function friseSuivant() {
 
 
 async function terminerEpreuve(scoreEpreuve, forceStepIdx) {
+  if (gameState?.status !== 'active') return; // ne rien figer hors partie active
   pbState = null;
   const parcours = getParcours();
   const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
@@ -2014,6 +2018,9 @@ function getScores() {
   } catch(e) { return {}; }
 }
 async function saveScore(key, val) {
+  // Sécurité : ne jamais écrire un score si la partie n'est pas en cours (évite de
+  // « ressusciter » d'anciens scores après un reset, avant le rechargement de l'app).
+  if (gameState?.status !== 'active') return;
   const scores = getScores();
   scores[key] = val;
   // Calculer total uniquement sur les blocs joués
