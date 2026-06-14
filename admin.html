@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-q</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-r</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -779,7 +779,23 @@ async function refreshAdminPhotoBadge(){
 }
 // Poll de secours : si le Realtime ne délivre pas l'INSERT, on détecte quand même
 // les nouvelles photos en attente (repère + son).
-let _adminPhotoPoll=null,_lastPendingSeen=0;
+let _adminPhotoPoll=null,_lastPendingSeen=0,_jdpPoll=null;
+// Poll de rafraîchissement de la page Jeu du Game Master (le Realtime n'est pas
+// toujours délivré → on resynchronise scores + état régulièrement).
+async function pollJdp(){
+  if(currentRole!=='gm') return;
+  if(!document.getElementById('aJdp')?.classList.contains('active')) return;
+  try{
+    const [g,ts]=await Promise.all([
+      db.from('jp_game_state').select('*').eq('id',1).maybeSingle(),
+      db.from('jp_team_states').select('equipe_nom,step_idx,phase,scores_etapes,total_score,parcours,votes_capitaine,reponse_epreuve,etape_status,epreuve_status')
+    ]);
+    if(g.data) jdpData.gameState=g.data;
+    (ts.data||[]).forEach(r=>{ jdpData.teamStates[r.equipe_nom]=r; });
+    renderJdpControle();
+    renderJdpSuivi();
+  }catch(e){}
+}
 async function pollAdminPhotos(){
   if(currentRole!=='gm') return;
   try{
@@ -894,6 +910,8 @@ async function enterGM(){
   pendingPhotoCount=(pending||[]).length;_lastPendingSeen=pendingPhotoCount;updateAdminPhotoBadge();
   if(_adminPhotoPoll) clearInterval(_adminPhotoPoll);
   _adminPhotoPoll=setInterval(pollAdminPhotos,5000);
+  if(_jdpPoll) clearInterval(_jdpPoll);
+  _jdpPoll=setInterval(pollJdp,4000);
   showAppPage('aJdp');
   renderJdpControle();
   renderJdpSuivi();
@@ -967,6 +985,7 @@ function logout(){
   currentRole=null;currentGMStation=null;currentGMTeam=null;currentPhotoTeam=null;
   pendingPhotoCount=0;gmRefusedCount=0;_lastPendingSeen=0;
   if(_adminPhotoPoll){clearInterval(_adminPhotoPoll);_adminPhotoPoll=null;}
+  if(_jdpPoll){clearInterval(_jdpPoll);_jdpPoll=null;}
   ['adminApp','gmApp','playerApp'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   document.getElementById('loginScreen').style.display='block';
   document.getElementById('pinInput').value='';
@@ -4043,26 +4062,59 @@ function jdpTeamParcours(ts,team){
   return (p||[]).map(b=> typeof b==='object'?b:{delai:0,etapeId:b,epreuveId:null});
 }
 
+// Phase calculée depuis l'horaire (le champ jp_team_states.phase n'est pas fiable :
+// il n'est pas réécrit par l'app joueur). Renvoie 'waiting'|'delai'|'marche'|'etape'|'regles'|'epreuve'|'done'.
+function jdpComputePhase(parcours){
+  const gs=jdpData.gameState;
+  if(!gs||gs.status==='waiting'||!gs.started_at) return 'waiting';
+  if(gs.status==='done') return 'done';
+  const H=new Date(gs.started_at).getTime();
+  const mult=gs.time_multiplier||1;
+  const now=H+(Date.now()-H)*mult;
+  let t=H;
+  for(let k=0;k<parcours.length;k++){
+    const bloc=parcours[k];
+    const et=appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
+    const ep=et?.epreuveId?appData.epreuves.find(e=>String(e.id)===String(et.epreuveId)):(bloc.epreuveId?appData.epreuves.find(e=>String(e.id)===String(bloc.epreuveId)):null);
+    const dM=(bloc.dureeMarche??300)*1000;
+    const dE=((et?.dureeEtape||bloc.dureeEtape||300))*1000;
+    const dEp=((ep?.duree||bloc.dureeEpreuve||600))*1000;
+    const dR=((ep?.dureeRegles||ep?.dureeregles||bloc.dureeRegles||120))*1000;
+    const dB=(bloc.dureeBloc||((bloc.dureeMarche||300)+(et?.dureeEtape||300)+(ep?.dureeRegles||ep?.dureeregles||120)+(ep?.duree||600)))*1000;
+    const delai=Math.max(0,dB-dM-dE-dR-dEp);
+    if(delai>0){ if(now<t+delai) return 'delai'; t+=delai; }
+    if(dM>0){ if(now<t+dM) return 'marche'; t+=dM; }
+    if(dE>0){ if(now<t+dE) return 'etape'; t+=dE; }
+    if(now<t+dR) return 'regles'; t+=dR;
+    if(now<t+dEp) return 'epreuve'; t+=dEp;
+  }
+  return 'done';
+}
+
 // Statut d'une équipe → point coloré (rouge=pas commencé, orange=en cours, vert=terminé)
 // + nom du capitaine.
-function jdpTeamStatus(ts){
-  let cap=ts?appData.capitaines[ts.equipe_nom]:null;
+function jdpTeamStatus(t){
+  const ts=jdpData.teamStates[t];
+  let cap=appData.capitaines[t]||null;
   let votesN=0, connecte=false;
   if(ts){
     try{ const v=JSON.parse(ts.votes_capitaine||'{}'); votesN=Object.keys(v).length;
       if(!cap){ const tally={}; Object.values(v).forEach(x=>tally[x]=(tally[x]||0)+1);
-        const membres=appData.joueurs.filter(j=>j.equipe_nom===ts.equipe_nom).length;
+        const membres=appData.joueurs.filter(j=>j.equipe_nom===t).length;
         const win=Object.entries(tally).find(([_,n])=>n>membres/2); if(win) cap=win[0]; } }catch(e){}
     const hasRep = ts.reponse_epreuve && ts.reponse_epreuve!=='{}' && ts.reponse_epreuve!=='';
     const hasScore = Object.keys(jdpTeamScores(ts)).length>0;
     connecte = votesN>0 || hasRep || hasScore || !!cap;
   }
   const gs=jdpData.gameState?.status||'waiting';
-  const phase=ts?.phase||'waiting';
   let dot;
-  if(phase==='done') dot='var(--success)';           // vert : terminé
-  else if(gs!=='waiting' && connecte) dot='var(--amber)'; // orange : en cours
-  else dot='var(--danger)';                            // rouge : pas commencé
+  if(gs==='waiting') dot='var(--danger)';
+  else {
+    const ph=jdpComputePhase(jdpTeamParcours(ts,t));
+    if(ph==='done') dot='var(--success)';
+    else if(connecte) dot='var(--amber)';
+    else dot='var(--danger)';
+  }
   return {dot, cap};
 }
 
@@ -4070,14 +4122,17 @@ function renderJdpSuivi(){
   const el=document.getElementById('jdpSuiviContent');
   if(!el) return;
 
-  const SQ=52; // largeur d'une colonne (assez large pour les libellés)
-  const labelCell=(txt,align)=>`<div style="flex:0 0 ${SQ}px;width:${SQ}px;font-size:9px;line-height:1.15;color:var(--ink-muted);text-align:center;height:24px;overflow:hidden;display:flex;align-items:${align};justify-content:center;padding:0 2px">${txt||''}</div>`;
-  const squareCell=(c)=>{
+  const SQ=30; // colonne resserrée
+  const cellHtml=(c)=>{
     const bg=c.filled?(c.kind==='etape'?'#1E4A5A':'#1E3A4A'):'transparent';
     const bdr=c.filled?bg:'var(--border)';
     const col=c.filled?'#fff':'var(--ink-muted)';
-    return `<div style="flex:0 0 ${SQ}px;width:${SQ}px;display:flex;justify-content:center">
-      <div style="width:28px;height:28px;border-radius:4px;background:${bg};border:2px solid ${bdr};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${col}">${c.val}</div>
+    // Libellé en biais 45° (bas-gauche → haut-droit), au-dessus du carré
+    return `<div style="flex:0 0 ${SQ}px;width:${SQ}px;display:flex;flex-direction:column;align-items:center">
+      <div style="height:54px;width:100%;position:relative">
+        <div style="position:absolute;left:13px;bottom:1px;transform-origin:left bottom;transform:rotate(-45deg);white-space:nowrap;font-size:9.5px;color:${c.kind==='etape'?'var(--gold-dark)':'var(--ink-muted)'};font-weight:${c.kind==='etape'?'600':'400'}">${c.label}</div>
+      </div>
+      <div style="width:26px;height:26px;border-radius:4px;background:${bg};border:2px solid ${bdr};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${col}">${c.val}</div>
     </div>`;
   };
 
@@ -4085,7 +4140,7 @@ function renderJdpSuivi(){
     const ts=jdpData.teamStates[t];
     const sc=jdpTeamScores(ts);
     const parcours=jdpTeamParcours(ts,t);
-    const st=jdpTeamStatus(ts?{...ts,equipe_nom:t}:null);
+    const st=jdpTeamStatus(t);
 
     let total=0;
     const cells=[];
@@ -4104,25 +4159,16 @@ function renderJdpSuivi(){
       }
     });
 
-    // Étape AU-DESSUS du carré, épreuve EN-DESSOUS (les colonnes alternent).
-    const lineEtapes  = cells.map(c=>labelCell(c.kind==='etape'?c.label:'','flex-end')).join('');
-    const lineEpreuves= cells.map(c=>labelCell(c.kind==='epreuve'?c.label:'','flex-start')).join('');
-    const lineSquares = cells.map(squareCell).join('');
     const titre = `${t}${st.cap?` <span style="font-weight:400;color:var(--ink-muted)">(${st.cap})</span>`:''}`;
-
     return `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">
           <span style="width:10px;height:10px;border-radius:50%;background:${st.dot};flex-shrink:0"></span>
           <span style="font-size:15px;font-weight:600">${titre}</span>
         </div>
         <span style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);flex-shrink:0">${total} <span style="font-size:11px;color:var(--ink-muted);font-weight:500">pts</span></span>
       </div>
-      <div style="overflow-x:auto">
-        <div style="display:flex">${lineEtapes}</div>
-        <div style="display:flex;margin:2px 0">${lineSquares}</div>
-        <div style="display:flex">${lineEpreuves}</div>
-      </div>
+      <div style="overflow-x:auto"><div style="display:flex">${cells.map(cellHtml).join('')}</div></div>
     </div>`;
   }).join('')||'<div class="notice">Aucune équipe.</div>';
 }
