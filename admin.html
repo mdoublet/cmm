@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-c</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-d</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -1182,6 +1182,12 @@ function renderJoueurCard(j){
   // Corps expandé
   return summary + `
       <div style="border-top:1px solid ${c.border};padding:12px 12px 10px">
+        <!-- Nom (renommer) -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--ink-muted);min-width:52px">Nom</span>
+          <input type="text" value="${(j.nom||'').replace(/"/g,'&quot;')}" onchange="renameJoueur(${j.id},this.value)"
+            style="flex:1;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px">
+        </div>
         <!-- Équipe + supprimer -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <span style="font-size:11px;color:var(--ink-muted);min-width:52px">Équipe</span>
@@ -1219,8 +1225,8 @@ function updateJoueurAnecdoteLocal(id,field,val){
   if(!j) return;
   j[field]=val;
   j._dirty=true;
-  applyJoueurCardState(id);
-  renderJoueurFilterTabs();
+  // Ne PAS re-render la carte ici (sinon le textarea est recréé et perd le focus
+  // après chaque caractère). L'état visuel est rafraîchi à l'enregistrement.
 }
 async function saveJoueurAnecdote(id){
   const j=appData.joueurs.find(x=>x.id===id);
@@ -1248,9 +1254,21 @@ async function updateJoueurEquipe(id,equipe){
   renderJoueurs();
 }
 async function deleteJoueur(id){
+  const j=appData.joueurs.find(x=>x.id===id);
+  if(!confirm(`Supprimer ${j?.nom||'ce joueur'} ?`)) return;
   await db.from('joueurs').delete().eq('id',id);
   appData.joueurs=appData.joueurs.filter(j=>j.id!==id);
   renderJoueurs();
+}
+async function renameJoueur(id,nom){
+  nom=(nom||'').trim();
+  if(!nom) return;
+  await db.from('joueurs').update({nom}).eq('id',id);
+  const j=appData.joueurs.find(x=>x.id===id);
+  if(j) j.nom=nom;
+  appData.joueurs.sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  const card=document.getElementById('joueurCard_'+id);
+  if(card) card.outerHTML=renderJoueurCard(j);
 }
 
 // ===================== MODE JOUEUR =====================
@@ -1325,7 +1343,7 @@ function renderEpEditor(){
   const qs=appData.questions[ep.id]||[];
   let h=`<div class="card">
     <div class="field"><div class="field-label">Titre de l'épreuve</div><input type="text" class="admin-input" id="epTitle" value="${epEdits[ep.id]?.title||ep.title||''}"
-      oninput="epDirty[${ep.id}]=true;renderAdminEpreuves()"></div>
+      oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()"></div>
     <div class="field"><div class="field-label">Instructions</div>
     <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
       <div style="display:flex;gap:2px;padding:6px 8px;background:var(--cream);border-bottom:1px solid var(--border);flex-wrap:wrap">
@@ -1348,20 +1366,20 @@ function renderEpEditor(){
     </div></div>
     ${(ep.type!=='photos'&&ep.type!=='villes')?`
     <div class="field"><div class="field-label">Règle de scoring</div><input type="text" class="admin-input" id="epScoring" value="${epEdits[ep.id]?.scoring||ep.scoring||''}"
-      oninput="epDirty[${ep.id}]=true;renderAdminEpreuves()"></div>
+      oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()"></div>
     <div class="field"><div class="field-label">Score maximum</div><input type="number" class="admin-input" id="epMax" value="${epEdits[ep.id]?.max_score||ep.max_score||10}" style="width:80px"
-      oninput="epDirty[${ep.id}]=true;renderAdminEpreuves()"></div>`:''}
+      oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()"></div>`:''}
     <div class="field"><div class="field-label">Durée de l'épreuve (s) ⏱</div>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="number" class="admin-input" id="epDuree" value="${epEdits[ep.id]?.duree||ep.duree||600}" min="60" style="width:100px;text-align:center"
-          oninput="epDirty[${ep.id}]=true;renderAdminEpreuves()">
+          oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()">
         <span style="font-size:12px;color:var(--ink-muted)">secondes</span>
       </div>
     </div>
     <div class="field"><div class="field-label">Durée lecture des règles (s) 📜</div>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="number" class="admin-input" id="epDureeRegles" value="${epEdits[ep.id]?.dureeRegles||ep.dureeRegles||120}" min="0" style="width:100px;text-align:center"
-          oninput="epDirty[${ep.id}]=true;renderAdminEpreuves()">
+          oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()">
         <span style="font-size:12px;color:var(--ink-muted)">secondes</span>
       </div>
     </div>`;
@@ -3705,9 +3723,9 @@ function flushCurrentEtapeEdits() {
   if (enigme!==undefined)    ed.enigme=enigme;
   if (indices[0]!==undefined) ed.indices=indices;
   if (epVal!==undefined)     ed.epreuveId=epVal?parseInt(epVal):null;
-  // Marquer dirty si changement
+  // Marquer dirty si changement (sans re-render → ne pas voler le focus de la saisie)
   const changed = nom!==e.nom || code!==e.code || enigme!==e.enigme;
-  if (changed) { etapeDirty[currentEtapeIdx]=true; renderEtapesTabs(); }
+  if (changed) etapeDirty[currentEtapeIdx]=true;
 }
 
 function addEtape() {
@@ -3746,26 +3764,26 @@ function renderEtapeEditor() {
     <div class="field">
       <div class="field-label">Nom de l'étape</div>
       <input type="text" id="etNom" value="${((etapeEdits[currentEtapeIdx]?.nom??e.nom)||'').replace(/"/g,'&quot;')}" placeholder="Ex : Blockhaus"
-        oninput="etapeDirty[${currentEtapeIdx}]=true;renderEtapesTabs()"
+        oninput="etapeDirty[${currentEtapeIdx}]=true;flushCurrentEtapeEdits()"
         style="width:100%;font-size:14px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif">
     </div>
     <div class="field">
       <div class="field-label">Lieu (description)</div>
       <input type="text" id="etLieu" value="${((etapeEdits[currentEtapeIdx]?.lieu??e.lieu)||'').replace(/"/g,'&quot;')}"
-        oninput="etapeDirty[currentEtapeIdx]=true;renderEtapesTabs()" placeholder="Ex : Sur la falaise, face à l'île de Ré"
+        oninput="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()" placeholder="Ex : Sur la falaise, face à l'île de Ré"
         style="width:100%;font-size:14px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif">
     </div>
     <div class="field">
       <div class="field-label">Code à trouver sur place 🪨</div>
       <input type="text" id="etCode" value="${((etapeEdits[currentEtapeIdx]?.code??e.code)||'').replace(/"/g,'&quot;')}"
-        oninput="etapeDirty[currentEtapeIdx]=true;renderEtapesTabs()" placeholder="Ex : 7832"
+        oninput="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()" placeholder="Ex : 7832"
         style="font-size:20px;text-align:center;letter-spacing:6px;padding:9px 12px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;width:160px">
     </div>
     <div class="field">
       <div class="field-label">Durée de l'étape (sur place) ⏱</div>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="number" id="etDureeEtape" value="${etapeEdits[currentEtapeIdx]?.dureeEtape||e.dureeEtape||300}"
-          oninput="etapeDirty[currentEtapeIdx]=true;renderEtapesTabs()" min="30" max="3600"
+          oninput="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()" min="30" max="3600"
           style="width:100px;font-size:16px;text-align:center;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif">
         <span style="font-size:13px;color:var(--ink-muted)">secondes (${Math.floor((e.dureeEtape||300)/60)} min)</span>
       </div>
