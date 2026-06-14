@@ -150,23 +150,16 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-u</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.14-a</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
 <!-- LOGIN -->
 <div id="loginScreen" style="display:none">
   <div class="login-wrap">
-    <div class="monogram">
-      <svg width="34" height="34" viewBox="0 0 38 38" fill="none">
-        <circle cx="19" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
-        <line x1="19" y1="12" x2="19" y2="32" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <path d="M9 20 Q9 32 19 32 Q29 32 29 20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <line x1="13" y1="12" x2="25" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-    </div>
+    <img src="tresor.png" alt="" onerror="this.style.display='none'" style="width:120px;height:120px;object-fit:contain;margin:0 auto 1rem;display:block">
     <h1 style="font-family:'Dancing Script',cursive;font-size:30px;font-weight:600;margin-bottom:4px">Caroline &amp; Marc</h1>
-    <p style="font-size:13px;color:var(--ink-muted);margin-bottom:2rem;line-height:1.6">Jeu de piste · 5 septembre 2026<br>Villa 180° Mer · L'Houmeau</p>
+    <p style="font-size:13px;color:var(--ink-muted);margin-bottom:2rem;line-height:1.6">5 septembre 2026<br>Villa 180° Mer · L'Houmeau</p>
     <div class="field">
       <label class="field-label">Ton prénom</label>
       <input type="text" id="playerNameInput" placeholder="Ex : Sophie" autocomplete="off" autocorrect="off" spellcheck="false"
@@ -516,22 +509,18 @@ function renderTeamView() {
     stopTimer();
     document.getElementById('timerBand').style.display='none';
     document.getElementById('stepRow').style.display='none';
-    const prenom = currentPlayer?.split(' ')[0] || '';
     const cap = appData.capitaines[currentTeam];
     document.getElementById('teamContent').innerHTML = `
       <div class="waiting-screen">
         <div class="hourglass">⏳</div>
-        <div style="font-family:'Dancing Script',cursive;font-size:22px;color:var(--gold-dark);margin-top:16px">Caroline &amp; Marc</div>
-        <div style="font-size:15px;font-weight:500;color:var(--ink);margin-top:12px">Bonjour ${prenom} !</div>
-        <div style="font-size:13px;color:var(--ink-muted);margin-top:4px">Équipe <strong>${currentTeam}</strong></div>
+        <div style="font-size:17px;font-weight:500;color:var(--ink);margin-top:18px">Le jeu va bientôt commencer…</div>
         ${cap
-          ? `<div style="margin-top:16px;background:var(--success-bg);border-radius:var(--radius-pill);padding:8px 18px;font-size:13px;color:var(--success)">⚓ Capitaine : <strong>${cap}</strong></div>`
-          : `<div class="warn-box" style="margin-top:16px;text-align:left">⚠️ Votre équipe n'a pas encore de capitaine. Le capitaine pourra répondre aux épreuves.</div>`
+          ? `<div style="margin-top:18px;background:var(--success-bg);border-radius:var(--radius-pill);padding:8px 18px;font-size:13px;color:var(--success)">⚓ Capitaine : <strong>${cap}</strong></div>`
+          : `<div class="warn-box" style="margin-top:20px;text-align:left;line-height:1.65">
+               <strong>Désignez un capitaine</strong> au sein de votre équipe, puis communiquez-le au Game Master.<br><br>
+               ⚓ Seul le capitaine pourra saisir les réponses pour toute l'équipe — choisissez quelqu'un à l'aise avec son smartphone.
+             </div>`
         }
-        <div style="display:inline-flex;align-items:center;gap:8px;background:var(--amber-bg);color:var(--amber);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-top:16px">
-          ⏸ En attente du démarrage
-        </div>
-        <div style="font-size:11px;color:var(--ink-muted);margin-top:12px;opacity:.7">Connecté en tant que : ${currentPlayer||'—'}</div>
       </div>`;
     return;
   }
