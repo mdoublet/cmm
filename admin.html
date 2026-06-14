@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-e</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-f</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -1171,9 +1171,9 @@ function renderJoueurCard(j){
       <!-- En-tête cliquable -->
       <div onclick="toggleJoueurCard(${j.id})"
         style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;user-select:none">
-        <span style="font-size:14px;flex-shrink:0">${c.icon}</span>
-        <span style="flex:1;font-size:14px;font-weight:500;color:var(--ink)">${j.nom}</span>
-        <span style="font-size:10px;font-weight:600;color:${c.badgeCol};background:${c.badgeBg};padding:2px 8px;border-radius:10px;white-space:nowrap">${c.badge}</span>
+        <span class="jc-icon" style="font-size:14px;flex-shrink:0">${c.icon}</span>
+        <span class="jc-nom" style="flex:1;font-size:14px;font-weight:500;color:var(--ink)">${j.nom}</span>
+        <span class="jc-badge" style="font-size:10px;font-weight:600;color:${c.badgeCol};background:${c.badgeBg};padding:2px 8px;border-radius:10px;white-space:nowrap">${c.badge}</span>
         <span style="font-size:12px;color:var(--ink-muted);margin-left:4px">${chevron}</span>
       </div>`;
 
@@ -1182,20 +1182,19 @@ function renderJoueurCard(j){
   // Corps expandé
   return summary + `
       <div style="border-top:1px solid ${c.border};padding:12px 12px 10px">
-        <!-- Nom (renommer) -->
+        <!-- Nom -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <span style="font-size:11px;color:var(--ink-muted);min-width:52px">Nom</span>
-          <input type="text" value="${(j.nom||'').replace(/"/g,'&quot;')}" onchange="renameJoueur(${j.id},this.value)"
+          <input type="text" value="${(j.nom||'').replace(/"/g,'&quot;')}" oninput="updateJoueurFieldLocal(${j.id},'nom',this.value)"
             style="flex:1;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px">
         </div>
-        <!-- Équipe + supprimer -->
+        <!-- Équipe -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <span style="font-size:11px;color:var(--ink-muted);min-width:52px">Équipe</span>
           <select class="joueur-equipe-select" style="flex:1" onchange="updateJoueurEquipe(${j.id},this.value)">
             <option value="">Sans équipe</option>
             ${appData.teams.map(t2=>`<option value="${t2}"${t2===j.equipe_nom?' selected':''}>${t2}</option>`).join('')}
           </select>
-          <button class="joueur-delete" onclick="deleteJoueur(${j.id})" title="Supprimer">✕</button>
         </div>
         <!-- Anecdote -->
         <div style="margin-bottom:8px">
@@ -1203,7 +1202,7 @@ function renderJoueurCard(j){
             ANECDOTE<span class="joueur-field-warn">${anecMissing&&state==='red'?' ⚠ manquante':''}</span>
           </div>
           <textarea class="joueur-anec-input" placeholder="Ex : A fait le voyage le plus long pour venir..."
-            oninput="updateJoueurAnecdoteLocal(${j.id},'anecdote',this.value)"
+            oninput="updateJoueurFieldLocal(${j.id},'anecdote',this.value)"
             style="width:100%;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid ${anecMissing&&state==='red'?'var(--danger)':'var(--border)'};background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px;min-height:64px;resize:vertical;transition:border-color .2s;line-height:1.5">${(j.anecdote||'').replace(/</g,'&lt;')}</textarea>
         </div>
         <!-- Commentaire -->
@@ -1212,28 +1211,43 @@ function renderJoueurCard(j){
             COMMENTAIRE<span class="joueur-field-warn">${commMissing&&state==='red'?' ⚠ manquant':''}</span><span style="font-weight:400;font-style:italic;color:var(--ink-muted)"> (affiché après la réponse)</span>
           </div>
           <textarea class="joueur-comm-input" placeholder="Ex : Il a pris l'avion depuis Tokyo !"
-            oninput="updateJoueurAnecdoteLocal(${j.id},'commentaire',this.value)"
+            oninput="updateJoueurFieldLocal(${j.id},'commentaire',this.value)"
             style="width:100%;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid ${commMissing&&state==='red'?'var(--danger)':'var(--border)'};background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px;min-height:80px;resize:vertical;transition:border-color .2s;line-height:1.5">${(j.commentaire||'').replace(/</g,'&lt;')}</textarea>
         </div>
-        <button class="btn btn-sm btn-gold" onclick="saveJoueurAnecdote(${j.id})">💾 Enregistrer</button>
-        <span class="save-msg" id="joueurSaveMsg_${j.id}" style="margin-left:8px">Sauvegardé ✓</span>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-gold" onclick="saveJoueur(${j.id})">💾 Enregistrer</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteJoueur(${j.id})">🗑 Supprimer</button>
+          <span class="save-msg" id="joueurSaveMsg_${j.id}">Sauvegardé ✓</span>
+        </div>
       </div>
     </div>`;
 }
-function updateJoueurAnecdoteLocal(id,field,val){
+// Mise à jour locale + passage de la carte en ORANGE (non sauvegardé) sans re-render
+// (préserve le focus de la saisie).
+function updateJoueurFieldLocal(id,field,val){
   const j=appData.joueurs.find(x=>x.id===id);
   if(!j) return;
   j[field]=val;
   j._dirty=true;
-  // Ne PAS re-render la carte ici (sinon le textarea est recréé et perd le focus
-  // après chaque caractère). L'état visuel est rafraîchi à l'enregistrement.
+  const card=document.getElementById('joueurCard_'+id);
+  if(card){
+    card.style.borderColor='#F59E0B';
+    card.style.background='#FFFBF0';
+    const ic=card.querySelector('.jc-icon'); if(ic) ic.textContent='🟡';
+    const bd=card.querySelector('.jc-badge'); if(bd){ bd.textContent='Modifié'; bd.style.background='#FEF3C7'; bd.style.color='#92400E'; }
+    if(field==='nom'){ const nm=card.querySelector('.jc-nom'); if(nm) nm.textContent=val; }
+  }
 }
-async function saveJoueurAnecdote(id){
+async function saveJoueur(id){
   const j=appData.joueurs.find(x=>x.id===id);
   if(!j) return;
-  await db.from('joueurs').update({anecdote:j.anecdote||'',commentaire:j.commentaire||''}).eq('id',id);
+  await db.from('joueurs').update({nom:(j.nom||'').trim(),anecdote:j.anecdote||'',commentaire:j.commentaire||''}).eq('id',id);
+  if((j.nom||'').trim()) j.nom=j.nom.trim();
   j._dirty=false;
-  applyJoueurCardState(id);
+  appData.joueurs.sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  // Re-render la carte (verte si complète, rouge si champs vides) — la saisie est finie.
+  const card=document.getElementById('joueurCard_'+id);
+  if(card) card.outerHTML=renderJoueurCard(j);
   renderJoueurFilterTabs();
   showSaveMsg('joueurSaveMsg_'+id);
 }
@@ -3636,7 +3650,9 @@ function syncInstrToHidden(){
   if(el&&hidden){
     hidden.value=el.innerHTML;
     epDirty[currentEpTab]=true;
-    renderAdminEpreuves();
+    // Collecter dans epEdits SANS re-render (sinon le champ texte riche est recréé
+    // et la saisie est perdue à chaque caractère).
+    flushCurrentEpEdits();
   }
 }
 // ===================== UTILS =====================
