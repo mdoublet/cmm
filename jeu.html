@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.14-d</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.14-e</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -445,7 +445,7 @@ function updateScoreBand() {
     const bloc = parcours[sched.blocIdx];
     const etape2 = appData.etapes.find(e=>String(e.id)===String(bloc?.etapeId));
     const epreuve2 = etape2?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(etape2.epreuveId)) : null;
-    const pot = epreuve2?.max_score || 10;
+    const pot = epreuve2 ? epreuveMaxScore(epreuve2) : 10;
     band.style.display = 'block';
     potEl.textContent = `+${pot} pts potentiels sur cette épreuve`;
     potEl.style.color = 'var(--ink-muted)';
@@ -623,7 +623,9 @@ function renderTeamView() {
     const isPastBloc = i < stepIdx;
     const isCurBloc  = i === stepIdx;
     const maxEp  = 10;
-    const maxEpr = ep3?.max_score || 10;
+    // Score max de l'épreuve calculé automatiquement selon le type (et non le champ
+    // max_score, devenu obsolète) : 1 pt par bonne réponse.
+    const maxEpr = epreuveMaxScore(ep3);
 
     // Scores finaux depuis le dict
     const scoreEpFinal  = scoresDict['etape_'+i] ?? (scoresEtapes ? (scoresEtapes[i*2]??null) : null);
@@ -695,7 +697,7 @@ function renderTeamView() {
   const maxTotal = parcours.reduce((s,b)=>{
     const e2=appData.etapes.find(e=>String(e.id)===String(b.etapeId));
     const ep2=e2?.epreuveId?appData.epreuves.find(ep=>String(ep.id)===String(e2.epreuveId)):null;
-    return s+10+(ep2?.max_score||10);
+    return s+10+(ep2?epreuveMaxScore(ep2):0);
   },0);
   progressHtml += `<div style="margin-left:6px;padding-left:8px;border-left:2px solid var(--gold);padding-bottom:2px">
     <div style="font-size:19px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${totalScore}</div>
@@ -1105,6 +1107,16 @@ function startTimerNeutral(endsAt, totalSecs, label) {
   timerInterval = setInterval(tick, mult > 1 ? 200 : 500);
 }
 
+// Score maximum d'une épreuve, calculé automatiquement selon le type (1 pt/bonne
+// réponse). Le champ max_score configuré n'est plus utilisé.
+function epreuveMaxScore(ep){
+  if(!ep) return 10;
+  if(ep.type==='photos') return 20;
+  if(ep.type==='villes') return Object.keys(appData.villesBac||{}).filter(l=>(appData.villesBac[l]||[]).length>0).length || 10;
+  if(ep.type==='qcm') return (appData.anecdotes||[]).length || 10;
+  if(ep.type==='frise') return (appData.joueursAvecAnecdotes||[]).filter(j=>j.equipe_nom===currentTeam).length || 10;
+  return ep.max_score || 10;
+}
 function calcScoreEpreuve(epreuve, rep) {
   if (!epreuve || !rep) return 0;
   if (epreuve.type === 'frise') {

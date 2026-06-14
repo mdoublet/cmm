@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-d</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-e</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -1365,9 +1365,9 @@ function renderEpEditor(){
       <input type="hidden" id="epInstrHidden" value="${(ep.instructions||'').replace(/"/g,'&quot;')}">
     </div></div>
     ${(ep.type!=='photos'&&ep.type!=='villes')?`
-    <div class="field"><div class="field-label">Règle de scoring</div><input type="text" class="admin-input" id="epScoring" value="${epEdits[ep.id]?.scoring||ep.scoring||''}"
+    <div class="field"><div class="field-label" style="color:var(--danger)">Règle de scoring <span style="font-weight:400;font-style:italic">(non utilisée par le jeu)</span></div><input type="text" class="admin-input" id="epScoring" value="${epEdits[ep.id]?.scoring||ep.scoring||''}"
       oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()"></div>
-    <div class="field"><div class="field-label">Score maximum</div><input type="number" class="admin-input" id="epMax" value="${epEdits[ep.id]?.max_score||ep.max_score||10}" style="width:80px"
+    <div class="field"><div class="field-label" style="color:var(--danger)">Score maximum <span style="font-weight:400;font-style:italic">(non utilisé — 1 pt par bonne réponse, max = nb de joueurs/questions)</span></div><input type="number" class="admin-input" id="epMax" value="${epEdits[ep.id]?.max_score||ep.max_score||10}" style="width:80px"
       oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()"></div>`:''}
     <div class="field"><div class="field-label">Durée de l'épreuve (s) ⏱</div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -3768,7 +3768,7 @@ function renderEtapeEditor() {
         style="width:100%;font-size:14px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif">
     </div>
     <div class="field">
-      <div class="field-label">Lieu (description)</div>
+      <div class="field-label" style="color:var(--danger)">Lieu (description) <span style="font-weight:400;font-style:italic">(non affiché aux joueurs)</span></div>
       <input type="text" id="etLieu" value="${((etapeEdits[currentEtapeIdx]?.lieu??e.lieu)||'').replace(/"/g,'&quot;')}"
         oninput="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()" placeholder="Ex : Sur la falaise, face à l'île de Ré"
         style="width:100%;font-size:14px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif">
