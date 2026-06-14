@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-f</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-g</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -1311,14 +1311,19 @@ function renderPlayerMode(){
 }
 
 // ===================== ADMIN: EPREUVES =====================
-function renderAdminEpreuves(){
-  document.getElementById('adminEpTabs').innerHTML=appData.epreuves.map(e=>{
+function renderEpTabsOnly(){
+  const el=document.getElementById('adminEpTabs');
+  if(!el) return;
+  el.innerHTML=appData.epreuves.map(e=>{
     const dirty = epDirty[e.id];
     const dot = dirty
-      ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#FF6B35;margin-left:5px;vertical-align:middle"></span>'
+      ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--danger);margin-left:5px;vertical-align:middle"></span>'
       : '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#5A9A6A;margin-left:5px;vertical-align:middle"></span>';
     return `<button class="ep-tab${e.id===currentEpTab?' active':''}" onclick="switchEpTab(${e.id},this)">${e.title}${dot}</button>`;
   }).join('');
+}
+function renderAdminEpreuves(){
+  renderEpTabsOnly();
   renderEpEditor();
 }
 function switchEpTab(id,btn){
@@ -1348,9 +1353,12 @@ function flushCurrentEpEdits() {
   if (duree!==undefined) e.duree=parseInt(duree)||600;
   if (dureeRegles!==undefined) e.dureeRegles=parseInt(dureeRegles)||120;
   if (ptsPerte!==undefined) e.pointsPerte=parseInt(ptsPerte)||2;
-  // Marquer dirty si différent de appData
-  const changed = e.title!==ep.title || e.duree!==ep.duree || e.dureeRegles!==ep.dureeRegles;
+  // Marquer dirty si différent de appData (tous les champs éditables)
+  const changed = e.title!==ep.title || (e.instructions!==undefined && e.instructions!==(ep.instructions||''))
+    || (e.scoring!==undefined && e.scoring!==(ep.scoring||'')) || (e.max_score!==undefined && e.max_score!==(ep.max_score))
+    || (e.duree!==undefined && e.duree!==ep.duree) || (e.dureeRegles!==undefined && e.dureeRegles!==ep.dureeRegles);
   if (changed) epDirty[currentEpTab]=true;
+  renderEpTabsOnly(); // met à jour le point d'état sans recréer l'éditeur (focus préservé)
 }
 function renderEpEditor(){
   const ep=appData.epreuves.find(e=>e.id===currentEpTab);
@@ -3698,16 +3706,19 @@ async function saveEtapes() {
   await db.from('jp_config').upsert({key:'jdp_etapes', value:JSON.stringify(appData.etapes)},{onConflict:'key'});
 }
 
-function renderEtapesTabs() {
+function renderEtapeTabsOnly() {
   const el = document.getElementById('etapesTabs');
   if (!el) return;
   el.innerHTML = appData.etapes.map((e,i) => {
     const dirty = etapeDirty[i];
     const dot = dirty
-      ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#FF6B35;margin-left:5px;vertical-align:middle"></span>'
+      ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--danger);margin-left:5px;vertical-align:middle"></span>'
       : '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#5A9A6A;margin-left:5px;vertical-align:middle"></span>';
     return `<button class="ep-tab${i===currentEtapeIdx?' active':''}" onclick="selectEtape(${i},this)">${etapeEdits[i]?.nom||e.nom||'Étape '+(i+1)}${dot}</button>`;
   }).join('') + `<button class="ep-tab" onclick="addEtape()" style="color:var(--gold-dark)">+ Ajouter</button>`;
+}
+function renderEtapesTabs() {
+  renderEtapeTabsOnly();
   renderEtapeEditor();
 }
 
@@ -3739,9 +3750,13 @@ function flushCurrentEtapeEdits() {
   if (enigme!==undefined)    ed.enigme=enigme;
   if (indices[0]!==undefined) ed.indices=indices;
   if (epVal!==undefined)     ed.epreuveId=epVal?parseInt(epVal):null;
-  // Marquer dirty si changement (sans re-render → ne pas voler le focus de la saisie)
-  const changed = nom!==e.nom || code!==e.code || enigme!==e.enigme;
+  // Marquer dirty si changement (sans re-render de l'éditeur → focus préservé)
+  const changed = nom!==e.nom || (lieu!==undefined && lieu!==(e.lieu||'')) || code!==e.code
+    || (dureeEtape && dureeEtape!==e.dureeEtape) || enigme!==e.enigme
+    || (epVal!==undefined && (epVal?parseInt(epVal):null)!==(e.epreuveId??null))
+    || JSON.stringify(indices)!==JSON.stringify(e.indices||['','','','','','']);
   if (changed) etapeDirty[currentEtapeIdx]=true;
+  renderEtapeTabsOnly(); // met à jour le point d'état sans recréer l'éditeur
 }
 
 function addEtape() {
@@ -3768,7 +3783,7 @@ function renderEtapeEditor() {
     const lblStyle = isLast ? 'color:var(--amber);font-weight:600' : '';
     indHtml += `<div class="field">
       <div class="field-label" style="${lblStyle}">${lbl}</div>
-      <textarea id="etIndice_${k}" placeholder="${ph}"
+      <textarea id="etIndice_${k}" placeholder="${ph}" oninput="flushCurrentEtapeEdits()"
         style="width:100%;min-height:55px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid ${bdr};background:${bg};color:var(--ink);font-family:'Playfair Display',serif;font-size:14px;font-style:italic;line-height:1.7;resize:vertical">${val}</textarea>
     </div>`;
   }
@@ -3806,7 +3821,7 @@ function renderEtapeEditor() {
     </div>
     <div class="field">
       <div class="field-label">Épreuve associée 🎯</div>
-      <select id="etEpreuve" style="width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px">
+      <select id="etEpreuve" onchange="flushCurrentEtapeEdits()" style="width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px">
         <option value="">— Aucune épreuve —</option>
         ${appData.epreuves.map(ep=>`<option value="${ep.id}" ${ep.id===e.epreuveId?'selected':''}>${ep.title}</option>`).join('')}
       </select>
@@ -3814,7 +3829,7 @@ function renderEtapeEditor() {
     <div class="divider"></div>
     <div class="field">
       <div class="field-label">Énigme de départ</div>
-      <textarea id="etEnigme" placeholder="Ce que les joueurs reçoivent pour trouver ce lieu..."
+      <textarea id="etEnigme" placeholder="Ce que les joueurs reçoivent pour trouver ce lieu..." oninput="flushCurrentEtapeEdits()"
         style="width:100%;min-height:80px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'Playfair Display',serif;font-size:14px;font-style:italic;line-height:1.7;resize:vertical">${(e.enigme||'').replace(/</g,'&lt;')}</textarea>
     </div>
     ${indHtml}
