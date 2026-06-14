@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-r</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.13-s</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -790,9 +790,12 @@ async function pollJdp(){
       db.from('jp_game_state').select('*').eq('id',1).maybeSingle(),
       db.from('jp_team_states').select('equipe_nom,step_idx,phase,scores_etapes,total_score,parcours,votes_capitaine,reponse_epreuve,etape_status,epreuve_status')
     ]);
+    const prevStatus=jdpData.gameState?.status;
     if(g.data) jdpData.gameState=g.data;
     (ts.data||[]).forEach(r=>{ jdpData.teamStates[r.equipe_nom]=r; });
-    renderJdpControle();
+    // Ne re-render le contrôle QUE si le statut a changé, sinon on écraserait le
+    // sélecteur de vitesse pendant que le Game Master le manipule.
+    if((g.data?.status)!==prevStatus) renderJdpControle();
     renderJdpSuivi();
   }catch(e){}
 }
@@ -2829,22 +2832,29 @@ async function renderAdminArchive(){
         </div>
       </div>`;
 
-      // Scores par épreuve
+      // Scores par épreuve : étapes (epreuve_id pair) puis épreuves (impair),
+      // chaque groupe trié par ordre alphabétique du nom.
       const byEp={};
-      scoreRows.forEach(r=>{ const k=r.epreuve_titre||('Épreuve '+r.epreuve_id); if(!byEp[k]) byEp[k]={}; byEp[k][r.equipe_nom]=r.score||0; });
+      scoreRows.forEach(r=>{ const k=r.epreuve_titre||('Épreuve '+r.epreuve_id);
+        if(!byEp[k]) byEp[k]={kind:((r.epreuve_id||0)%2===0?'etape':'epreuve'),scores:{}};
+        byEp[k].scores[r.equipe_nom]=r.score||0; });
       const teams=ranked.map(r=>r[0]);
+      const ordered=Object.entries(byEp).sort((a,b)=>{
+        if(a[1].kind!==b[1].kind) return a[1].kind==='etape'?-1:1;
+        return a[0].localeCompare(b[0],'fr');
+      });
       html+=`<div style="margin-bottom:14px">
-        <div style="font-size:12px;font-weight:500;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📊 Scores par épreuve</div>
+        <div style="font-size:12px;font-weight:500;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📊 Scores par étape &amp; épreuve</div>
         <div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)">
           <table style="width:100%;border-collapse:collapse;min-width:280px">
             <thead><tr style="background:var(--cream)">
-              <th style="padding:8px 12px;font-size:11px;font-weight:500;color:var(--ink-muted);text-align:left;border-bottom:1px solid var(--border)">Épreuve</th>
+              <th style="padding:8px 12px;font-size:11px;font-weight:500;color:var(--ink-muted);text-align:left;border-bottom:1px solid var(--border)"></th>
               ${teams.map(t=>`<th style="padding:8px;font-size:11px;font-weight:500;color:var(--ink-muted);text-align:center;border-bottom:1px solid var(--border)">${t}</th>`).join('')}
             </tr></thead>
             <tbody>
-              ${Object.entries(byEp).map(([ep,scores])=>`<tr>
+              ${ordered.map(([ep,info])=>`<tr>
                 <td style="padding:8px 12px;font-size:12px;border-bottom:1px solid var(--border)">${ep}</td>
-                ${teams.map(t=>`<td style="padding:8px;text-align:center;font-size:13px;font-weight:500;border-bottom:1px solid var(--border);color:var(--gold-dark)">${scores[t]!=null?scores[t]+' pts':'—'}</td>`).join('')}
+                ${teams.map(t=>`<td style="padding:8px;text-align:center;font-size:13px;font-weight:500;border-bottom:1px solid var(--border);color:var(--gold-dark)">${info.scores[t]!=null?info.scores[t]:'—'}</td>`).join('')}
               </tr>`).join('')}
             </tbody>
           </table>
@@ -2993,10 +3003,10 @@ async function confirmReset(){
       const et=appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
       const ep=et?.epreuveId?appData.epreuves.find(e=>String(e.id)===String(et.epreuveId)):(bloc.epreuveId?appData.epreuves.find(e=>String(e.id)===String(bloc.epreuveId)):null);
       if(sc['etape_'+i]!==undefined){
-        jdpArchiveRows.push({equipe_nom:ts.equipe_nom,epreuve_id:i*2,epreuve_titre:`É${i+1} · ${et?.nom||'Étape'}`,score:sc['etape_'+i]||0,archive_label:label,archived_at:now});
+        jdpArchiveRows.push({equipe_nom:ts.equipe_nom,epreuve_id:i*2,epreuve_titre:(et?.nom||'Étape'),score:sc['etape_'+i]||0,archive_label:label,archived_at:now});
       }
       if(ep && sc['ep_'+i]!==undefined){
-        jdpArchiveRows.push({equipe_nom:ts.equipe_nom,epreuve_id:i*2+1,epreuve_titre:`Ép${i+1} · ${ep.title||'Épreuve'}`,score:sc['ep_'+i]||0,archive_label:label,archived_at:now});
+        jdpArchiveRows.push({equipe_nom:ts.equipe_nom,epreuve_id:i*2+1,epreuve_titre:(ep.title||'Épreuve'),score:sc['ep_'+i]||0,archive_label:label,archived_at:now});
       }
     });
   });

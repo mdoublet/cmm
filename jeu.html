@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-r</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.13-s</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -1962,6 +1962,17 @@ let lastBlocIdx = null;
 let motcleSaisi = ''; // préserver la saisie entre les renders
 let renderBloqueUntil = 0; // timestamp ms — bloquer les re-renders du poll jusqu'à ce moment
 
+// Détecte le démarrage d'une NOUVELLE partie (started_at change) → recharge la page
+// pour repartir d'un état 100% propre (sinon d'anciens scores locaux peuvent
+// « ressusciter » via la fusion max du poll).
+let _jpStartedAt = undefined;
+function checkGameRestart(gs){
+  const sa = gs?.started_at || null;
+  if (_jpStartedAt === undefined) { _jpStartedAt = sa; return; }
+  if (sa && sa !== _jpStartedAt) { _jpStartedAt = sa; try{location.reload();}catch(e){} return; }
+  _jpStartedAt = sa;
+}
+
 // Registre des setTimeout actifs pour éviter les doublons
 // Clé = type+blocIdx+detail, valeur = {id, endsAt}
 const activeTimers = new Map();
@@ -2078,7 +2089,7 @@ function subscribeRealtime() {
       }).subscribe();
     const s2 = db.channel('jp-game-'+ts)
       .on('postgres_changes',{event:'*',schema:'public',table:'jp_game_state'}, p=>{
-        if (p.new) { gameState=p.new; renderTeamView(); }
+        if (p.new) { checkGameRestart(p.new); gameState=p.new; renderTeamView(); }
       }).subscribe();
     // Subscription photos (validation par admin)
     const sPhotos = db.channel('jp-photos-'+currentTeam+'-'+ts)
@@ -2114,6 +2125,7 @@ function subscribeRealtime() {
       ]);
       let changed = false;
 
+      if (gsRes.data) checkGameRestart(gsRes.data);
       if (gsRes.data && gsRes.data.status !== gameState?.status) {
         gameState = gsRes.data; changed = true;
       }
