@@ -150,7 +150,7 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.14-h</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.14-i</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
@@ -1107,6 +1107,12 @@ function startTimerNeutral(endsAt, totalSecs, label) {
   timerInterval = setInterval(tick, mult > 1 ? 200 : 500);
 }
 
+// Durée d'affichage de la réponse (s) pour les quiz, configurée dans l'admin
+// (jp_config jdp_reveal_<id>). Défaut 5 s.
+function epreuveReveal(ep){
+  const v = parseInt(appData.config?.['jdp_reveal_'+(ep?.id)]);
+  return (v>0 && v<=60) ? v : 5;
+}
 // Score maximum d'une épreuve, calculé automatiquement selon le type (1 pt/bonne
 // réponse). Le champ max_score configuré n'est plus utilisé.
 function epreuveMaxScore(ep){
@@ -1747,14 +1753,25 @@ function renderEpreuveQCM(epreuve) {
       <div class="anec-text" style="font-weight:500">${label}</div>
     </div>`;
   }).join('');
-  const isLastQ = qIdx >= anecdotes.length-1;
+  let revealHtml='';
+  if (answered) {
+    const ok = chosen===a.reponse;
+    let inner = `<div style="font-weight:600;color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅ Bonne réponse !':'❌ Mauvaise réponse'}</div>`;
+    if (!ok) inner += `<div style="margin-top:4px">Bonne réponse : <strong>${a.reponse}</strong></div>`;
+    if (a.commentaire) inner += `<div style="margin-top:6px;color:var(--ink-soft)">💡 ${a.commentaire}</div>`;
+    revealHtml = `<div style="margin-top:12px;background:${ok?'var(--success-bg)':'var(--danger-bg)'};border:1px solid ${ok?'var(--success)':'var(--danger)'};border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;line-height:1.5">${inner}<div style="margin-top:8px;font-size:11px;color:var(--ink-muted)">⏭ Question suivante dans un instant…</div></div>`;
+    // Avancement automatique après la durée d'affichage configurée (capitaine)
+    if (isCaptain) {
+      const mult = gameState?.time_multiplier || 1;
+      scheduleTimer('qcm_next_'+(teamState.step_idx||0)+'_'+qIdx, Date.now()+Math.max(400, epreuveReveal(epreuve)*1000/mult), ()=>qcmSuivant());
+    }
+  }
   return `<div class="card">
     <div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px">Question ${qIdx+1} / ${anecdotes.length}</div>
     <div style="font-size:11px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Celui qui…</div>
     <div style="font-size:17px;font-weight:500;font-family:'Playfair Display',serif;margin-bottom:14px;line-height:1.4">${a.celui_qui||''}</div>
     <div style="display:flex;gap:8px">${optBtns}</div>
-    ${answered&&a.commentaire?`<div style="margin-top:12px;background:${chosen===a.reponse?'var(--success-bg)':'var(--info-bg)'};border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:${chosen===a.reponse?'var(--success)':'var(--ink-soft)'};line-height:1.5">💡 ${a.commentaire}</div>`:''}
-    ${answered&&isCaptain?`<button class="btn btn-gold btn-full" style="margin-top:12px" onclick="qcmSuivant()">${isLastQ?'Terminer ✓':'Question suivante →'}</button>`:''}
+    ${revealHtml}
   </div>`;
 }
 
@@ -1816,6 +1833,12 @@ function renderEpreuveFrise(epreuve) {
   const correct = reponses[qIdx+'_correct'];
   const choices = appData.joueurs.filter(jj=>jj.equipe_nom===currentTeam).sort((a,b)=>a.nom.localeCompare(b.nom));
 
+  // Avancement automatique après la durée d'affichage de la réponse (capitaine)
+  if (answered && isCaptain) {
+    const mult = gameState?.time_multiplier || 1;
+    scheduleTimer('frise_next_'+(teamState.step_idx||0)+'_'+qIdx, Date.now()+Math.max(400, epreuveReveal(epreuve)*1000/mult), ()=>friseSuivant());
+  }
+
   return `<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <span style="font-size:12px;color:var(--ink-muted)">Anecdote ${qIdx+1} / ${joueurs.length}</span>
@@ -1828,7 +1851,7 @@ function renderEpreuveFrise(epreuve) {
         <div style="font-size:15px;color:var(--ink)">C’était : <strong>${j.nom}</strong></div>
         ${j.commentaire?`<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">💬 ${j.commentaire}</div>`:''}
       </div>
-      ${isCaptain?'<button class="btn btn-gold btn-full" onclick="friseSuivant()">Anecdote suivante →</button>':'<div style="font-size:13px;color:var(--ink-muted);text-align:center">En attente du capitaine...</div>'}
+      <div style="font-size:11px;color:var(--ink-muted);text-align:center">⏭ Anecdote suivante dans un instant…</div>
     ` : `
       <div style="font-size:13px;font-weight:500;color:var(--ink-muted);margin-bottom:10px">À qui correspond cette anecdote ?</div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:12px">

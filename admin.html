@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-h</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-i</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -1340,6 +1340,7 @@ function flushCurrentEpEdits() {
   const instr = document.getElementById('epInstrHidden')?.value;
   const duree = document.getElementById('epDuree')?.value;
   const dureeRegles = document.getElementById('epDureeRegles')?.value;
+  const reveal = document.getElementById('epReveal')?.value;
   if (title===undefined) return;
   if (!epEdits[currentEpTab]) epEdits[currentEpTab] = {};
   const e = epEdits[currentEpTab];
@@ -1347,6 +1348,7 @@ function flushCurrentEpEdits() {
   if (instr!==undefined) e.instructions=instr;
   if (duree!==undefined) e.duree=parseInt(duree)||600;
   if (dureeRegles!==undefined) e.dureeRegles=parseInt(dureeRegles)||120;
+  if (reveal!==undefined) e.reveal=parseInt(reveal)||5;
   // NB : le statut "modifié" (epDirty) est posé par les handlers oninput (= saisie
   // utilisateur réelle). On ne le déduit PAS d'une comparaison ici, car flush est
   // aussi appelé au changement d'onglet (ce qui produisait de faux "modifié").
@@ -1391,7 +1393,15 @@ function renderEpEditor(){
           oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()">
         <span style="font-size:12px;color:var(--ink-muted)">secondes</span>
       </div>
-    </div>`;
+    </div>
+    ${(ep.type==='qcm'||ep.type==='frise')?`
+    <div class="field"><div class="field-label">Durée d'affichage de la réponse (s) 💬</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" class="admin-input" id="epReveal" value="${epEdits[ep.id]?.reveal ?? (parseInt(jdpData.config?.['jdp_reveal_'+ep.id])||5)}" min="1" max="30" style="width:100px;text-align:center"
+          oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()">
+        <span style="font-size:12px;color:var(--ink-muted)">secondes (bonne réponse + explication)</span>
+      </div>
+    </div>`:''}`;
   if(ep.type==='photos'){
     const qs = appData.questions[currentEpTab]||[];
     const ptsPerte = ep.pointsPerte||2;
@@ -3888,6 +3898,13 @@ async function saveEpDureeAndEpreuve(epId, epType) {
   if (!appData.jdpEpreuves[epId]) appData.jdpEpreuves[epId] = {};
   appData.jdpEpreuves[epId].duree = duree;
   await db.from('epreuves').update({title, instructions, scoring, max_score, duree, dureeregles: dureeRegles}).eq('id', epId);
+  // Durée d'affichage de la réponse (quiz) — stockée dans jp_config
+  if ((epType==='qcm'||epType==='frise') && edits.reveal!==undefined) {
+    const rv=String(edits.reveal);
+    if(!jdpData.config) jdpData.config={};
+    jdpData.config['jdp_reveal_'+epId]=rv;
+    await db.from('jp_config').upsert({key:'jdp_reveal_'+epId, value:rv},{onConflict:'key'});
+  }
   // Reset dirty
   epDirty[epId] = false;
   delete epEdits[epId];
