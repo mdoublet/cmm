@@ -223,7 +223,7 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-g</div>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">ADMIN — v2026.06.14-h</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Connexion en cours...</div><div id="loaderError" style="display:none;font-size:12px;color:#A32020;margin-top:8px;max-width:300px;text-align:center"></div></div>
 
@@ -1338,27 +1338,19 @@ function flushCurrentEpEdits() {
   if (!ep) return;
   const title = document.getElementById('epTitle')?.value;
   const instr = document.getElementById('epInstrHidden')?.value;
-  const scoring = document.getElementById('epScoring')?.value;
-  const max = document.getElementById('epMax')?.value;
   const duree = document.getElementById('epDuree')?.value;
   const dureeRegles = document.getElementById('epDureeRegles')?.value;
-  const ptsPerte = document.getElementById('epPointsPerte')?.value;
   if (title===undefined) return;
   if (!epEdits[currentEpTab]) epEdits[currentEpTab] = {};
   const e = epEdits[currentEpTab];
   if (title!==undefined) e.title=title;
   if (instr!==undefined) e.instructions=instr;
-  if (scoring!==undefined) e.scoring=scoring;
-  if (max!==undefined) e.max_score=parseInt(max)||10;
   if (duree!==undefined) e.duree=parseInt(duree)||600;
   if (dureeRegles!==undefined) e.dureeRegles=parseInt(dureeRegles)||120;
-  if (ptsPerte!==undefined) e.pointsPerte=parseInt(ptsPerte)||2;
-  // Marquer dirty si différent de appData (tous les champs éditables)
-  const changed = e.title!==ep.title || (e.instructions!==undefined && e.instructions!==(ep.instructions||''))
-    || (e.scoring!==undefined && e.scoring!==(ep.scoring||'')) || (e.max_score!==undefined && e.max_score!==(ep.max_score))
-    || (e.duree!==undefined && e.duree!==ep.duree) || (e.dureeRegles!==undefined && e.dureeRegles!==ep.dureeRegles);
-  if (changed) epDirty[currentEpTab]=true;
-  renderEpTabsOnly(); // met à jour le point d'état sans recréer l'éditeur (focus préservé)
+  // NB : le statut "modifié" (epDirty) est posé par les handlers oninput (= saisie
+  // utilisateur réelle). On ne le déduit PAS d'une comparaison ici, car flush est
+  // aussi appelé au changement d'onglet (ce qui produisait de faux "modifié").
+  renderEpTabsOnly(); // reflète le point d'état sans recréer l'éditeur (focus préservé)
 }
 function renderEpEditor(){
   const ep=appData.epreuves.find(e=>e.id===currentEpTab);
@@ -1386,11 +1378,6 @@ function renderEpEditor(){
         oninput="syncInstrToHidden()">${ep.instructions||''}</div>
       <input type="hidden" id="epInstrHidden" value="${(ep.instructions||'').replace(/"/g,'&quot;')}">
     </div></div>
-    ${(ep.type!=='photos'&&ep.type!=='villes')?`
-    <div class="field"><div class="field-label" style="color:var(--danger)">Règle de scoring <span style="font-weight:400;font-style:italic">(non utilisée par le jeu)</span></div><input type="text" class="admin-input" id="epScoring" value="${epEdits[ep.id]?.scoring||ep.scoring||''}"
-      oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()"></div>
-    <div class="field"><div class="field-label" style="color:var(--danger)">Score maximum <span style="font-weight:400;font-style:italic">(non utilisé — 1 pt par bonne réponse, max = nb de joueurs/questions)</span></div><input type="number" class="admin-input" id="epMax" value="${epEdits[ep.id]?.max_score||ep.max_score||10}" style="width:80px"
-      oninput="epDirty[${ep.id}]=true;flushCurrentEpEdits()"></div>`:''}
     <div class="field"><div class="field-label">Durée de l'épreuve (s) ⏱</div>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="number" class="admin-input" id="epDuree" value="${epEdits[ep.id]?.duree||ep.duree||600}" min="60" style="width:100px;text-align:center"
@@ -3734,7 +3721,6 @@ function flushCurrentEtapeEdits() {
   const e = appData.etapes[currentEtapeIdx];
   if (!e) return;
   const nom       = document.getElementById('etNom')?.value.trim();
-  const lieu      = document.getElementById('etLieu')?.value.trim();
   const code      = document.getElementById('etCode')?.value.trim();
   const dureeEtape= parseInt(document.getElementById('etDureeEtape')?.value)||null;
   const enigme    = document.getElementById('etEnigme')?.value.trim();
@@ -3744,19 +3730,14 @@ function flushCurrentEtapeEdits() {
   if (!etapeEdits[currentEtapeIdx]) etapeEdits[currentEtapeIdx]={};
   const ed = etapeEdits[currentEtapeIdx];
   if (nom!==undefined)       ed.nom=nom;
-  if (lieu!==undefined)      ed.lieu=lieu;
   if (code!==undefined)      ed.code=code;
   if (dureeEtape)            ed.dureeEtape=dureeEtape;
   if (enigme!==undefined)    ed.enigme=enigme;
   if (indices[0]!==undefined) ed.indices=indices;
   if (epVal!==undefined)     ed.epreuveId=epVal?parseInt(epVal):null;
-  // Marquer dirty si changement (sans re-render de l'éditeur → focus préservé)
-  const changed = nom!==e.nom || (lieu!==undefined && lieu!==(e.lieu||'')) || code!==e.code
-    || (dureeEtape && dureeEtape!==e.dureeEtape) || enigme!==e.enigme
-    || (epVal!==undefined && (epVal?parseInt(epVal):null)!==(e.epreuveId??null))
-    || JSON.stringify(indices)!==JSON.stringify(e.indices||['','','','','','']);
-  if (changed) etapeDirty[currentEtapeIdx]=true;
-  renderEtapeTabsOnly(); // met à jour le point d'état sans recréer l'éditeur
+  // Le statut "modifié" est posé par les handlers oninput (saisie réelle), pas par une
+  // comparaison (flush est aussi appelé au changement d'onglet → faux "modifié").
+  renderEtapeTabsOnly(); // reflète le point d'état sans recréer l'éditeur
 }
 
 function addEtape() {
@@ -3783,7 +3764,7 @@ function renderEtapeEditor() {
     const lblStyle = isLast ? 'color:var(--amber);font-weight:600' : '';
     indHtml += `<div class="field">
       <div class="field-label" style="${lblStyle}">${lbl}</div>
-      <textarea id="etIndice_${k}" placeholder="${ph}" oninput="flushCurrentEtapeEdits()"
+      <textarea id="etIndice_${k}" placeholder="${ph}" oninput="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()"
         style="width:100%;min-height:55px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid ${bdr};background:${bg};color:var(--ink);font-family:'Playfair Display',serif;font-size:14px;font-style:italic;line-height:1.7;resize:vertical">${val}</textarea>
     </div>`;
   }
@@ -3796,12 +3777,6 @@ function renderEtapeEditor() {
       <div class="field-label">Nom de l'étape</div>
       <input type="text" id="etNom" value="${((etapeEdits[currentEtapeIdx]?.nom??e.nom)||'').replace(/"/g,'&quot;')}" placeholder="Ex : Blockhaus"
         oninput="etapeDirty[${currentEtapeIdx}]=true;flushCurrentEtapeEdits()"
-        style="width:100%;font-size:14px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif">
-    </div>
-    <div class="field">
-      <div class="field-label" style="color:var(--danger)">Lieu (description) <span style="font-weight:400;font-style:italic">(non affiché aux joueurs)</span></div>
-      <input type="text" id="etLieu" value="${((etapeEdits[currentEtapeIdx]?.lieu??e.lieu)||'').replace(/"/g,'&quot;')}"
-        oninput="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()" placeholder="Ex : Sur la falaise, face à l'île de Ré"
         style="width:100%;font-size:14px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif">
     </div>
     <div class="field">
@@ -3821,7 +3796,7 @@ function renderEtapeEditor() {
     </div>
     <div class="field">
       <div class="field-label">Épreuve associée 🎯</div>
-      <select id="etEpreuve" onchange="flushCurrentEtapeEdits()" style="width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px">
+      <select id="etEpreuve" onchange="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()" style="width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px">
         <option value="">— Aucune épreuve —</option>
         ${appData.epreuves.map(ep=>`<option value="${ep.id}" ${ep.id===e.epreuveId?'selected':''}>${ep.title}</option>`).join('')}
       </select>
@@ -3829,7 +3804,7 @@ function renderEtapeEditor() {
     <div class="divider"></div>
     <div class="field">
       <div class="field-label">Énigme de départ</div>
-      <textarea id="etEnigme" placeholder="Ce que les joueurs reçoivent pour trouver ce lieu..." oninput="flushCurrentEtapeEdits()"
+      <textarea id="etEnigme" placeholder="Ce que les joueurs reçoivent pour trouver ce lieu..." oninput="etapeDirty[currentEtapeIdx]=true;flushCurrentEtapeEdits()"
         style="width:100%;min-height:80px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);color:var(--ink);font-family:'Playfair Display',serif;font-size:14px;font-style:italic;line-height:1.7;resize:vertical">${(e.enigme||'').replace(/</g,'&lt;')}</textarea>
     </div>
     ${indHtml}
