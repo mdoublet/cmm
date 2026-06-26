@@ -13,13 +13,13 @@
   --ink:#0D2B33;--ink-soft:#2A4F5A;--ink-muted:#5A7D87;
   --border:#B8D0D8;--border-strong:#7AAAB8;
   --success-bg:#E6F4EC;--success:#1E7A45;
-  --danger:#A32020;--info-bg:#E5F0F5;
+  --danger:#A32020;--danger-bg:#FCEAEA;--info-bg:#E5F0F5;
   --amber-bg:#FFF8EC;--amber:#B8620A;
   --radius:12px;--radius-sm:8px;--radius-pill:24px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--cream)}
-body{font-family:'DM Sans',sans-serif;color:var(--ink);min-height:100vh;max-width:480px;margin:0 auto;padding-bottom:80px}
+body{font-family:'DM Sans',sans-serif;color:var(--ink);min-height:100vh;max-width:480px;margin:0 auto;padding-top:24px;padding-bottom:80px}
 
 #globalLoader{position:fixed;inset:0;background:var(--cream);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
 .loader-ring{width:40px;height:40px;border:3px solid var(--gold-light);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
@@ -150,22 +150,16 @@ input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:100000;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:#fff;background:var(--gold-dark);text-align:center;padding:4px 8px;pointer-events:none">JEU — v2026.06.14-i</div>
 <div id="toastContainer"></div>
 <div id="globalLoader"><div class="loader-ring"></div><div style="font-size:13px;color:var(--ink-muted)">Chargement...</div></div>
 
 <!-- LOGIN -->
 <div id="loginScreen" style="display:none">
   <div class="login-wrap">
-    <div class="monogram">
-      <svg width="34" height="34" viewBox="0 0 38 38" fill="none">
-        <circle cx="19" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
-        <line x1="19" y1="12" x2="19" y2="32" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <path d="M9 20 Q9 32 19 32 Q29 32 29 20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <line x1="13" y1="12" x2="25" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-    </div>
+    <img src="tresor.png?v=2" alt="" onerror="this.style.display='none'" style="width:120px;height:120px;object-fit:contain;margin:0 auto 1rem;display:block">
     <h1 style="font-family:'Dancing Script',cursive;font-size:30px;font-weight:600;margin-bottom:4px">Caroline &amp; Marc</h1>
-    <p style="font-size:13px;color:var(--ink-muted);margin-bottom:2rem;line-height:1.6">Jeu de piste · 5 septembre 2026<br>Villa 180° Mer · L'Houmeau</p>
+    <p style="font-size:13px;color:var(--ink-muted);margin-bottom:2rem;line-height:1.6">5 septembre 2026<br>Villa 180° Mer · L'Houmeau</p>
     <div class="field">
       <label class="field-label">Ton prénom</label>
       <input type="text" id="playerNameInput" placeholder="Ex : Sophie" autocomplete="off" autocorrect="off" spellcheck="false"
@@ -197,7 +191,7 @@ input:focus{outline:none;border-color:var(--gold)}
     <span id="scoreBandPotentiel" style="font-size:12px;color:var(--ink-muted)"></span>
   </div>
   <!-- Barre de progression avec scores -->
-  <div id="stepRow" style="display:none;overflow-x:auto;background:var(--warm-white);border-bottom:1px solid var(--border);padding:8px 12px"></div>
+  <div id="stepRow" style="display:none;overflow-x:auto;background:var(--warm-white);border-bottom:1px solid var(--border);padding:8px 8px"></div>
   <!-- Contenu -->
   <div class="content" id="teamContent"></div>
 </div>
@@ -231,6 +225,35 @@ function showToast({ icon='ℹ️', title='', msg='', type='', duration=4000 }) 
   el.innerHTML = `<span class="toast-icon">${icon}</span><div class="toast-body"><div class="toast-title">${title}</div>${msg?`<div class="toast-msg">${msg}</div>`:''}</div>`;
   document.getElementById('toastContainer').appendChild(el);
   if (duration) setTimeout(() => el.remove(), duration);
+}
+// Petit bip de notification (validation / refus photo). Nécessite une interaction
+// utilisateur préalable pour débloquer l'AudioContext (géré au 1er clic).
+let _jpAudioCtx = null;
+function getJpAudioContext() {
+  if (!_jpAudioCtx) {
+    try { _jpAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { return null; }
+  }
+  if (_jpAudioCtx.state === 'suspended') _jpAudioCtx.resume();
+  return _jpAudioCtx;
+}
+document.addEventListener('click', () => getJpAudioContext(), {once:true, capture:true});
+function playJpSound(success) {
+  const ctx = getJpAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    if (success) { o.frequency.setValueAtTime(523, now); o.frequency.setValueAtTime(784, now+0.15); }
+    else         { o.frequency.setValueAtTime(440, now); o.frequency.setValueAtTime(330, now+0.15); }
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.3, now+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.5);
+    o.start(now); o.stop(now+0.5);
+  } catch(e) {}
 }
 function fmtTime(secs) {
   const s = Math.max(0, Math.floor(secs));
@@ -408,7 +431,7 @@ function updateScoreBand() {
   const phase = sched.phase;
 
   if (phase === 'marche' || phase === 'etape') {
-    const shown = teamState.indices_shown || 0;
+    const shown = (teamState.indices_shown >= 6) ? 6 : indicesAffichesNow(sched);
     if (shown >= 6) {
       // Mot-clé trouvé — ne pas afficher "0 pts potentiels" en rouge
       band.style.display = 'none';
@@ -422,7 +445,7 @@ function updateScoreBand() {
     const bloc = parcours[sched.blocIdx];
     const etape2 = appData.etapes.find(e=>String(e.id)===String(bloc?.etapeId));
     const epreuve2 = etape2?.epreuveId ? appData.epreuves.find(ep=>String(ep.id)===String(etape2.epreuveId)) : null;
-    const pot = epreuve2?.max_score || 10;
+    const pot = epreuve2 ? epreuveMaxScore(epreuve2) : 10;
     band.style.display = 'block';
     potEl.textContent = `+${pot} pts potentiels sur cette épreuve`;
     potEl.style.color = 'var(--ink-muted)';
@@ -486,22 +509,18 @@ function renderTeamView() {
     stopTimer();
     document.getElementById('timerBand').style.display='none';
     document.getElementById('stepRow').style.display='none';
-    const prenom = currentPlayer?.split(' ')[0] || '';
     const cap = appData.capitaines[currentTeam];
     document.getElementById('teamContent').innerHTML = `
       <div class="waiting-screen">
         <div class="hourglass">⏳</div>
-        <div style="font-family:'Dancing Script',cursive;font-size:22px;color:var(--gold-dark);margin-top:16px">Caroline &amp; Marc</div>
-        <div style="font-size:15px;font-weight:500;color:var(--ink);margin-top:12px">Bonjour ${prenom} !</div>
-        <div style="font-size:13px;color:var(--ink-muted);margin-top:4px">Équipe <strong>${currentTeam}</strong></div>
+        <div style="font-size:17px;font-weight:500;color:var(--ink);margin-top:18px">Le jeu va bientôt commencer…</div>
         ${cap
-          ? `<div style="margin-top:16px;background:var(--success-bg);border-radius:var(--radius-pill);padding:8px 18px;font-size:13px;color:var(--success)">⚓ Capitaine : <strong>${cap}</strong></div>`
-          : `<div class="warn-box" style="margin-top:16px;text-align:left">⚠️ Votre équipe n'a pas encore de capitaine. Le capitaine pourra répondre aux épreuves.</div>`
+          ? `<div style="margin-top:18px;background:var(--success-bg);border-radius:var(--radius-pill);padding:8px 18px;font-size:13px;color:var(--success)">⚓ Capitaine : <strong>${cap}</strong></div>`
+          : `<div class="warn-box" style="margin-top:20px;text-align:left;line-height:1.65">
+               <strong>Désignez un capitaine</strong> au sein de votre équipe, puis communiquez-le au Game Master.<br><br>
+               ⚓ Seul le capitaine pourra saisir les réponses pour toute l'équipe — choisissez quelqu'un à l'aise avec son smartphone.
+             </div>`
         }
-        <div style="display:inline-flex;align-items:center;gap:8px;background:var(--amber-bg);color:var(--amber);padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:500;margin-top:16px">
-          ⏸ En attente du démarrage
-        </div>
-        <div style="font-size:11px;color:var(--ink-muted);margin-top:12px;opacity:.7">Connecté en tant que : ${currentPlayer||'—'}</div>
       </div>`;
     return;
   }
@@ -590,7 +609,13 @@ function renderTeamView() {
   <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:8px;overflow:hidden">
     <div style="height:4px;background:var(--gold);border-radius:2px;width:${progressPct.toFixed(1)}%;transition:width .5s"></div>
   </div>
-  <div style="display:flex;align-items:flex-end;gap:4px">`;
+  <div style="display:flex;align-items:flex-end;gap:3px">`;
+
+  const phaseDone = sched.phase === 'done';
+  const curRep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
+  // Le total est calculé à partir des cases FINALISÉES affichées → il correspond
+  // toujours exactement à la somme des petits carrés.
+  let totalScore = 0;
 
   parcours.forEach((bloc, i) => {
     const et3   = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
@@ -598,31 +623,30 @@ function renderTeamView() {
     const isPastBloc = i < stepIdx;
     const isCurBloc  = i === stepIdx;
     const maxEp  = 10;
-    const maxEpr = ep3?.max_score || 10;
+    // Score max de l'épreuve calculé automatiquement selon le type (et non le champ
+    // max_score, devenu obsolète) : 1 pt par bonne réponse.
+    const maxEpr = epreuveMaxScore(ep3);
 
     // Scores finaux depuis le dict
     const scoreEpFinal  = scoresDict['etape_'+i] ?? (scoresEtapes ? (scoresEtapes[i*2]??null) : null);
     const scoreEprFinal = scoresDict['ep_'+i]    ?? (scoresEtapes ? (scoresEtapes[i*2+1]??null) : null);
 
     // ---- CARRÉ ÉTAPE ----
-    const etapeEnCours  = isCurBloc && (sched.phase === 'marche' || sched.phase === 'etape');
     const motcleTrouve  = isCurBloc && (teamState?.indices_shown || 0) >= 6;
-    const etapeTerminee = isPastBloc || motcleTrouve || (isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve'));
+    const etapeEnCours  = isCurBloc && (sched.phase === 'marche' || sched.phase === 'etape') && !motcleTrouve;
+    const etapeTerminee = isPastBloc || phaseDone || motcleTrouve || (isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve'));
 
     let etBg, etBdr, etVal, etStyle;
-    if (etapeTerminee && scoreEpFinal !== null) {
+    if (etapeTerminee) {
+      // Score figé (mot-clé trouvé/temps écoulé). Si absent du dict → 0 (mot-clé raté).
       etBg = '#1E4A5A'; etBdr = '#1E4A5A';
-      etVal = scoreEpFinal;
+      etVal = scoreEpFinal !== null ? scoreEpFinal : 0;
       etStyle = 'font-size:12px;font-weight:700;color:white';
-    } else if (etapeTerminee && isCurBloc) {
-      // Phase règles/épreuve — score étape figé
-      etBg = '#1E4A5A'; etBdr = '#1E4A5A';
-      const shownFig = teamState?.indices_shown || 0;
-      etVal = shownFig >= 6 ? 0 : Math.max(0, maxEp - shownFig * 2);
-      etStyle = 'font-size:12px;font-weight:700;color:white';
+      totalScore += (etVal || 0);
     } else if (etapeEnCours) {
       etBg = 'transparent'; etBdr = 'var(--border)';
-      const shownCur = teamState?.indices_shown || 0;
+      // Score potentiel en direct = calcul temporel (cohérent avec l'affichage des indices)
+      const shownCur = indicesAffichesNow(sched);
       etVal = Math.max(0, maxEp - shownCur * 2);
       etStyle = 'font-size:12px;font-weight:400;font-style:italic;color:#2A6A7A';
     } else {
@@ -631,7 +655,7 @@ function renderTeamView() {
     }
 
     progressHtml += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-      <div style="width:30px;height:30px;border-radius:4px;background:${etBg};border:2px solid ${etBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <div style="width:27px;height:27px;border-radius:4px;background:${etBg};border:2px solid ${etBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
         <span style="${etStyle}">${etVal}</span>
       </div>
       <div style="font-size:10px;font-weight:500;color:var(--ink-muted);white-space:nowrap">${maxEp}</div>
@@ -639,56 +663,44 @@ function renderTeamView() {
 
     if (ep3) {
       // ---- CARRÉ ÉPREUVE ----
-      const eprEnCours  = isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve');
-      const eprTerminee = isPastBloc;
+      // Terminée d'office si bloc passé, jeu fini, ou épreuve complétée par anticipation.
+      const eprComplete = isCurBloc && sched.phase === 'epreuve' && epreuveEstComplete(ep3, curRep);
+      const eprTerminee = isPastBloc || phaseDone || eprComplete;
+      const eprEnCours  = !eprTerminee && isCurBloc && (sched.phase === 'regles' || sched.phase === 'epreuve');
 
       let epBg, epBdr, eprVal, eprStyle;
       if (eprTerminee) {
         epBg = '#1E3A4A'; epBdr = '#1E3A4A';
-        eprVal = scoreEprFinal ?? 0;
+        eprVal = scoreEprFinal ?? (isCurBloc ? calcScoreEpreuve(ep3, curRep) : 0);
         eprStyle = 'font-size:12px;font-weight:700;color:white';
+        totalScore += (eprVal || 0);
       } else if (eprEnCours) {
         epBg = 'transparent'; epBdr = 'var(--border)';
-        const rep = (()=>{try{return JSON.parse(teamState?.reponse_epreuve||'{}');}catch(e){return {};}})();
-        eprVal = calcScoreEpreuve(ep3, rep);
+        eprVal = calcScoreEpreuve(ep3, curRep);
         eprStyle = 'font-size:12px;font-weight:400;font-style:italic;color:#2A6A7A';
       } else {
         epBg = 'transparent'; epBdr = 'var(--border)';
         eprVal = ''; eprStyle = '';
       }
 
-      progressHtml += `<div style="width:6px;height:2px;background:${isPastBloc?'#1E3A4A':'var(--border)'}"></div>`;
+      const lienFini = isPastBloc || phaseDone;
+      progressHtml += `<div style="width:5px;height:2px;background:${lienFini?'#1E3A4A':'var(--border)'}"></div>`;
       progressHtml += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-        <div style="width:30px;height:30px;border-radius:4px;background:${epBg};border:2px solid ${epBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <div style="width:27px;height:27px;border-radius:4px;background:${epBg};border:2px solid ${epBdr};display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <span style="${eprStyle}">${eprVal}</span>
         </div>
         <div style="font-size:10px;font-weight:500;color:var(--ink-muted);white-space:nowrap">${maxEpr}</div>
       </div>`;
     }
-    if (i < nb-1) progressHtml += `<div style="width:6px;height:2px;background:${isPastBloc?'var(--gold)':'var(--border)'}"></div>`;
+    if (i < nb-1) progressHtml += `<div style="width:5px;height:2px;background:${(isPastBloc||phaseDone)?'var(--gold)':'var(--border)'}"></div>`;
   });
-
-  // Total : blocs strictement passés + bloc courant si status='done'
-  const etapeStat   = teamState?.etape_status   || 'pending';
-  const epreuveStat = teamState?.epreuve_status || 'pending';
-  const totalScore = Object.entries(scoresDict).reduce((acc,[k,v])=>{
-    const m = k.match(/^(etape|ep)_(\d+)$/);
-    if (!m) return acc;
-    const kind = m[1]; const idx = parseInt(m[2]);
-    if (idx < stepIdx) return acc + (v||0);
-    if (idx === stepIdx) {
-      if (kind === 'etape' && etapeStat   === 'done') return acc + (v||0);
-      if (kind === 'ep'    && epreuveStat === 'done') return acc + (v||0);
-    }
-    return acc;
-  }, 0);
   const maxTotal = parcours.reduce((s,b)=>{
     const e2=appData.etapes.find(e=>String(e.id)===String(b.etapeId));
     const ep2=e2?.epreuveId?appData.epreuves.find(ep=>String(ep.id)===String(e2.epreuveId)):null;
-    return s+10+(ep2?.max_score||10);
+    return s+10+(ep2?epreuveMaxScore(ep2):0);
   },0);
-  progressHtml += `<div style="margin-left:8px;padding-left:10px;border-left:2px solid var(--gold);padding-bottom:2px">
-    <div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${totalScore}</div>
+  progressHtml += `<div style="margin-left:6px;padding-left:8px;border-left:2px solid var(--gold);padding-bottom:2px">
+    <div style="font-size:19px;font-weight:700;font-family:'Playfair Display',serif;color:var(--gold-dark);line-height:1">${totalScore}</div>
     <div style="font-size:10px;color:var(--ink-muted);font-weight:500">/ ${maxTotal} pts</div>
   </div>`;
   progressHtml += '</div></div>';
@@ -852,6 +864,23 @@ function renderMarcheSchedule(sched, parcours) {
 }
 
 // ---- Étape (schedule) — indices débloqués auto après marche ----
+// Nombre d'indices à afficher = fonction DÉTERMINISTE du temps écoulé dans la phase
+// étape. Aucune écriture en base, donc aucune course possible : la valeur ne peut
+// que croître au fil du temps (plus de clignotement apparition/disparition).
+const ETAPE_NB_INDICES = 5;
+const ETAPE_SCORE_MAX = 10;
+const ETAPE_COUT_INDICE = 2;
+function indicesAffichesNow(sched) {
+  if (!sched || sched.phase !== 'etape') return 0;
+  const mult = gameState?.time_multiplier || 1;
+  const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+  const virtualNow = H + (Date.now() - H) * mult;
+  const elapsed = virtualNow - sched.phaseStart;
+  const trancheDurMs = (sched.phaseEnd - sched.phaseStart) / (ETAPE_NB_INDICES + 1);
+  if (trancheDurMs <= 0 || elapsed <= 0) return 0;
+  return Math.min(ETAPE_NB_INDICES, Math.floor(elapsed / trancheDurMs));
+}
+
 function renderEtapeSchedule(sched, parcours) {
   const stepIdx = sched.blocIdx;
   const bloc = parcours[stepIdx];
@@ -861,107 +890,65 @@ function renderEtapeSchedule(sched, parcours) {
   const etape   = appData.etapes.find(e=>String(e.id)===etapeId) || appData.etapes[stepIdx];
   if (!etape) { document.getElementById('teamContent').innerHTML=`<div class="notice">Étape introuvable.</div>`; return; }
 
-  // Timer : même clé que la marche pour que le décompte soit continu
-  const dureeEtapeMs2 = ((etape.dureeEtape || bloc.dureeEtape || 300)) * 1000;
+  // Clé distincte de la marche : le minuteur est ré-initialisé proprement au début
+  // de l'étape (comme pour règles/épreuve) → la coloration orange/rouge fonctionne.
+  // La durée de référence reste marche+étape pour que la barre soit continue
+  // (≈50 % au début de l'étape) et ne reparte pas à 100 %.
+  const dureeMarcheMs = (bloc.dureeMarche ?? 300) * 1000;
+  const etapeDurMsTimer = sched.phaseEnd - sched.phaseStart;
   const endsAt = sched.phaseEnd;
-  const dur = (endsAt - sched.phaseStart)/1000;
-  const key = 'etape_total_'+currentTeam+'_'+stepIdx;
+  const dur = (dureeMarcheMs + etapeDurMsTimer) / 1000;
+  const key = 'etape_phase_'+currentTeam+'_'+stepIdx;
   startTimer(endsAt, dur, `Étape ${stepIdx+1}`, key);
 
   const mult = gameState?.time_multiplier || 1;
   const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
-  const realElapsed = Date.now() - H;
-  const virtualNow = H + realElapsed * mult;
+  const virtualNow = H + (Date.now() - H) * mult;
   const remaining = (endsAt - virtualNow) / 1000;
 
-  // Score : 10 pts de départ, -2 par indice demandé (5 indices max)
-  const SCORE_MAX = 10;
-  const COUT_INDICE = 2;
-  const NB_INDICES = 5;
+  const NB_INDICES = ETAPE_NB_INDICES;
+  const SCORE_MAX  = ETAPE_SCORE_MAX;
 
-  let indicesShown = teamState?.indices_shown || 0;
-  // Réinitialiser si on change d'étape — SAUF si indices_shown=6 (mot-clé trouvé)
-  if ((teamState?.step_idx ?? -1) !== stepIdx && indicesShown < 6) {
-    indicesShown = 0;
-    db.from('jp_team_states').update({indices_shown:0, score_etape:SCORE_MAX, step_idx:stepIdx})
-      .eq('equipe_nom',currentTeam).then(()=>{
-        if(teamState){teamState.indices_shown=0; teamState.score_etape=SCORE_MAX; teamState.step_idx=stepIdx;}
-      });
+  // indices_shown ne sert plus que de DRAPEAU "mot-clé trouvé" (=6).
+  // Changement d'étape : remettre le drapeau à 0 une seule fois.
+  if ((teamState?.step_idx ?? -1) !== stepIdx && (teamState?.indices_shown||0) >= 6) {
+    teamState.indices_shown = 0;
+    db.from('jp_team_states').update({indices_shown:0, step_idx:stepIdx}).eq('equipe_nom',currentTeam)
+      .then(()=>{ if(teamState){teamState.indices_shown=0; teamState.step_idx=stepIdx;} });
+  } else if ((teamState?.step_idx ?? -1) !== stepIdx) {
+    teamState.step_idx = stepIdx;
+    db.from('jp_team_states').update({step_idx:stepIdx}).eq('equipe_nom',currentTeam).then(()=>{});
   }
-  // Mot-clé déjà trouvé (indices_shown=6) → écran d'attente
-  if (indicesShown >= 6) {
-    // indices_shown=6 = mot-clé trouvé. Score = 10 - (vrais indices montrés) * 2
-    // On ne peut pas savoir combien d'indices ont été montrés avant la validation
-    // Utiliser score_etape s'il est cohérent (< 10 et >= 0)
-    const scoreActuel = (teamState?.score_etape !== undefined && teamState.score_etape >= 0 && teamState.score_etape <= 10)
-      ? teamState.score_etape
-      : 10;
+
+  // Mot-clé déjà trouvé (drapeau =6 sur CETTE étape) → écran d'attente
+  if ((teamState?.indices_shown||0) >= 6 && (teamState?.step_idx ?? -1) === stepIdx) {
+    const scoreActuel = (teamState?.score_etape >= 0 && teamState?.score_etape <= 10) ? teamState.score_etape : 0;
     renderAttenteFinEtape(scoreActuel, stepIdx, parcours);
     return;
   }
 
-  // Initialiser score_etape
-  if (teamState?.score_etape === undefined || teamState?.score_etape === null) {
-    db.from('jp_team_states').update({score_etape: SCORE_MAX}).eq('equipe_nom', currentTeam).then(()=>{});
-    if (teamState) teamState.score_etape = SCORE_MAX;
-  }
+  // Nombre d'indices affichés = pur calcul temporel
+  const indicesAffiches = indicesAffichesNow(sched);
+  const scoreActuel = Math.max(0, SCORE_MAX - indicesAffiches * ETAPE_COUT_INDICE);
+  const trancheDurMs = (sched.phaseEnd - sched.phaseStart) / (NB_INDICES + 1);
 
-  // Logique N+1 tranches : tranche 0 = attente (pas d'indice), tranche k = indice k
-  const etapeElapsed = virtualNow - sched.phaseStart;
-  const etapeDurMs = sched.phaseEnd - sched.phaseStart;
-  const trancheDurMs = etapeDurMs / (NB_INDICES + 1);
-
-  // Combien d'indices dus ? seulement si elapsed > 0 pour éviter les faux positifs
-  const trancheActuelle = etapeElapsed > 0 ? Math.floor(etapeElapsed / trancheDurMs) : 0;
-  const indicesDus = Math.min(NB_INDICES, Math.max(0, trancheActuelle));
-
-  if (indicesDus > indicesShown) {
-    const newScore = Math.max(0, SCORE_MAX - indicesDus * COUT_INDICE);
-    db.from('jp_team_states').update({indices_shown: indicesDus, score_etape: newScore}).eq('equipe_nom', currentTeam)
-      .then(() => { if (teamState) { teamState.indices_shown = indicesDus; teamState.score_etape = newScore; }});
-  }
-
-  // Planifier les prochains déblocages
-  for (let i = Math.max(indicesShown, indicesDus); i < NB_INDICES; i++) {
-    // L'indice i+1 se débloque au début de la tranche i+1
+  // Replanifier un simple RE-RENDER à chaque prochain palier (jamais d'écriture en base)
+  for (let i = indicesAffiches; i < NB_INDICES; i++) {
     const triggerAt = sched.phaseStart + trancheDurMs * (i + 1);
     const realDelayMs = Math.max(0, (triggerAt - virtualNow) / mult);
-    if (realDelayMs > 0 && realDelayMs < 3600000) {
-      scheduleTimer('indice_'+sched.blocIdx+'_'+(i+1), Date.now()+realDelayMs, async () => {
-        if (!teamState) return;
-        // Vérifier en base directement pour ne pas écrire si étape déjà terminée
-        const {data: fresh} = await db.from('jp_team_states').select('etape_status,indices_shown,step_idx').eq('equipe_nom', currentTeam).single();
-        if (!fresh) return;
-        if (fresh.etape_status === 'done' || (fresh.indices_shown||0) >= 6 || fresh.step_idx !== sched.blocIdx) {
-          // Étape terminée ou bloc changé — synchroniser local et ne rien écrire
-          if (teamState) {
-            teamState.etape_status = fresh.etape_status;
-            teamState.indices_shown = fresh.indices_shown;
-            teamState.step_idx = fresh.step_idx;
-          }
-          return;
-        }
-        const shown = fresh.indices_shown || 0;
-        const H2 = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
-        const phase2 = computePhaseFromSchedule(H2, parcours);
-        if (shown <= i && phase2.phase === 'etape' && phase2.blocIdx === sched.blocIdx) {
-          const newScore = Math.max(0, SCORE_MAX - (i+1) * COUT_INDICE);
-          if(teamState){ teamState.indices_shown=i+1; teamState.score_etape=newScore; }
-          db.from('jp_team_states').update({indices_shown: i+1, score_etape: newScore}).eq('equipe_nom', currentTeam);
-          renderTeamView();
-        }
-      });
+    if (realDelayMs >= 0 && realDelayMs < 3600000) {
+      scheduleTimer('indice_'+stepIdx+'_'+(i+1), Date.now()+realDelayMs+40, () => renderTeamView());
     }
   }
 
-  // Fin du temps → passer directement à l'épreuve (phase calculée changera automatiquement)
+  // Fin du temps → étape terminée (mot-clé raté) à 0 pt
   const realRemainingMs = Math.max(0, remaining * 1000 / mult);
   if (realRemainingMs > 0) {
-    scheduleTimer('expir_etape_'+sched.blocIdx, Date.now()+realRemainingMs, () => {
+    scheduleTimer('expir_etape_'+stepIdx, Date.now()+realRemainingMs, () => {
       if (!teamState) return;
       const H2 = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
       const phase2 = computePhaseFromSchedule(H2, parcours);
-      if (phase2.phase === 'etape' && phase2.blocIdx === sched.blocIdx && teamState.etape_status !== 'done') {
+      if (phase2.phase === 'etape' && phase2.blocIdx === stepIdx && teamState.etape_status !== 'done') {
         if(teamState){teamState.indices_shown=6; teamState.score_etape=0; teamState.etape_status='done';}
         db.from('jp_team_states').update({indices_shown:6, score_etape:0, etape_status:'done'}).eq('equipe_nom',currentTeam);
         renderTeamView();
@@ -969,28 +956,26 @@ function renderEtapeSchedule(sched, parcours) {
     });
   }
 
-  // Indices : textes à la suite, sans cadenas, sans numéros
+  // Indices : textes affichés à la suite
   const indicesTextes = [];
-  for (let k = 0; k < 5; k++) {
-    if (k < indicesShown) {
+  for (let k = 0; k < NB_INDICES; k++) {
+    if (k < indicesAffiches) {
       const txt = (etape.indices||[])[k]||'';
       if (txt) indicesTextes.push(txt.replace(/\n/g,'<br>'));
     }
   }
-  // Mot-clé révélé si tous les indices épuisés
-  if (indicesShown >= 5) {
+  // Après le 5e indice, on révèle le mot-clé pour éviter un blocage
+  if (indicesAffiches >= NB_INDICES) {
     const codeTxt = (etape.indices||[])[5]||etape.code||'';
     if (codeTxt) indicesTextes.push(`🔑 <strong>${codeTxt}</strong>`);
   }
-  // Temps avant prochain indice
-  const trancheDurMsDisplay = (sched.phaseEnd - sched.phaseStart) / (NB_INDICES + 1);
-  const prochainK = Math.min(indicesShown, NB_INDICES - 1);
-  const nextTrigger = sched.phaseStart + trancheDurMsDisplay * (prochainK + 1);
-  const secsToNext = Math.max(0, Math.round((nextTrigger - virtualNow) / 1000));
+  // Temps avant le prochain indice
+  const prochainTrigger = sched.phaseStart + trancheDurMs * (indicesAffiches + 1);
+  const secsToNext = Math.max(0, Math.round((prochainTrigger - virtualNow) / 1000));
 
   let indicesHtml = '';
-  if (indicesTextes.length || (indicesShown < NB_INDICES && secsToNext > 0)) {
-    const prochainTxt = (indicesShown < NB_INDICES && secsToNext > 0)
+  if (indicesTextes.length || (indicesAffiches < NB_INDICES && secsToNext > 0)) {
+    const prochainTxt = (indicesAffiches < NB_INDICES && secsToNext > 0)
       ? `<div style="margin-top:${indicesTextes.length?'8px':'0'};padding-top:${indicesTextes.length?'8px':'0'};${indicesTextes.length?'border-top:1px dashed var(--border);':''}font-size:11px;color:var(--ink-muted)">💡 Prochain indice dans ${secsToNext}s</div>`
       : '';
     indicesHtml = `<div style="padding:10px 14px;background:var(--warm-white);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px">
@@ -998,8 +983,6 @@ function renderEtapeSchedule(sched, parcours) {
       ${prochainTxt}
     </div>`;
   }
-
-  const scoreActuel = teamState?.score_etape ?? SCORE_MAX;
 
   const galetHtml = isCaptain ? `
     <div class="card">
@@ -1045,6 +1028,7 @@ function renderAttenteFinEtape(score, stepIdx, parcours) {
   // Recalcul des offsets depuis H, comme dans computePhaseFromSchedule
   let t = H;
   let etapeEnd = null;
+  let refTotalMs = 0; // durée de référence (marche+étape) pour une barre cohérente
   for (let k = 0; k <= stepIdx && k < parcours.length; k++) {
     const bloc = parcours[k];
     const etapeBloc = appData.etapes.find(e=>String(e.id)===String(bloc.etapeId));
@@ -1056,16 +1040,17 @@ function renderAttenteFinEtape(score, stepIdx, parcours) {
     const dureeBloc = (bloc.dureeBloc || (bloc.dureeMarche||300) + (etapeBloc?.dureeEtape||300) + (epreuveBloc?.dureeRegles||120) + (epreuveBloc?.duree||600)) * 1000;
     const delai = Math.max(0, dureeBloc - dureeMarche - dureeEtape - dureeRegles - dureeEpreuve);
     t += delai + dureeMarche;
-    if (k === stepIdx) { etapeEnd = t + dureeEtape; break; }
+    if (k === stepIdx) { etapeEnd = t + dureeEtape; refTotalMs = dureeMarche + dureeEtape; break; }
     t += dureeEtape + dureeRegles + dureeEpreuve;
   }
 
   const endsAt = etapeEnd || virtualNow;
   const durLeft = Math.max(0, (endsAt - virtualNow) / 1000);
   if (durLeft > 0) {
-    // totalSecs = durée totale d'attente pour avoir une barre cohérente
-    const totalForBar = Math.max(durLeft, 1);
-    startTimerNeutral(endsAt, totalForBar, 'Épreuve dans…');
+    // Barre proportionnelle au temps total (marche+étape) + coloration orange/rouge,
+    // comme la phase étape elle-même → décompte cohérent et continu.
+    const totalForBar = (refTotalMs > 0 ? refTotalMs : (endsAt - virtualNow)) / 1000;
+    startTimer(endsAt, totalForBar, 'Épreuve dans…', 'etape_attente_'+currentTeam+'_'+stepIdx);
   } else {
     document.getElementById('timerBand').style.display='none';
   }
@@ -1122,17 +1107,49 @@ function startTimerNeutral(endsAt, totalSecs, label) {
   timerInterval = setInterval(tick, mult > 1 ? 200 : 500);
 }
 
+// Durée d'affichage de la réponse (s) pour les quiz, configurée dans l'admin
+// (jp_config jdp_reveal_<id>). Défaut 5 s.
+function epreuveReveal(ep){
+  const v = parseInt(appData.config?.['jdp_reveal_'+(ep?.id)]);
+  return (v>0 && v<=60) ? v : 5;
+}
+// Score maximum d'une épreuve, calculé automatiquement selon le type (1 pt/bonne
+// réponse). Le champ max_score configuré n'est plus utilisé.
+function epreuveMaxScore(ep){
+  if(!ep) return 10;
+  if(ep.type==='photos') return 20;
+  if(ep.type==='villes') return Object.keys(appData.villesBac||{}).filter(l=>(appData.villesBac[l]||[]).length>0).length || 10;
+  if(ep.type==='qcm') return (appData.anecdotes||[]).length || 10;
+  if(ep.type==='frise') return (appData.joueursAvecAnecdotes||[]).filter(j=>j.equipe_nom===currentTeam).length || 10;
+  return ep.max_score || 10;
+}
 function calcScoreEpreuve(epreuve, rep) {
   if (!epreuve || !rep) return 0;
   if (epreuve.type === 'frise') {
     return Object.keys(rep).filter(k=>!isNaN(k)&&rep[k+'_correct']===true).length;
   } else if (epreuve.type === 'qcm') {
-    const qs = epreuve.questions||[];
-    return qs.filter((q,i)=>rep[i]===q.correct).length;
+    const anecdotes = (appData.anecdotes||[]).slice().sort((a,b)=>(a.ordre||0)-(b.ordre||0));
+    return anecdotes.filter((a,i)=>rep[i]===a.reponse).length;
   } else if (epreuve.type === 'villes') {
     return Object.keys(rep).filter(k => rep[k] && !k.endsWith('_correct') && rep[k+'_correct']===true).length;
   }
   return 0;
+}
+
+// Une épreuve est « terminée par anticipation » (avant la fin du temps) si le joueur a
+// tout fait : 2 photos validées, ou toutes les questions du quiz répondues.
+function epreuveEstComplete(epreuve, rep) {
+  if (!epreuve || !rep) return false;
+  if (epreuve.type === 'photos') return !!(rep.ch1?.done && rep.ch2?.done);
+  if (epreuve.type === 'qcm') {
+    const n = (appData.anecdotes||[]).length;
+    return n > 0 && Object.keys(rep).filter(k=>!isNaN(k)).length >= n;
+  }
+  if (epreuve.type === 'frise') {
+    const n = (appData.joueursAvecAnecdotes||[]).filter(j=>j.equipe_nom===currentTeam).length;
+    return n > 0 && Object.keys(rep).filter(k=>!isNaN(k)).length >= n;
+  }
+  return false; // villes : on attend la fin du temps imparti
 }
 
 function renderScorePhase(pts, titre, sousTitre, parcours) {
@@ -1164,6 +1181,7 @@ function renderScorePhase(pts, titre, sousTitre, parcours) {
 
 async function validerMotcle() {
   if (!isCaptain) return;
+  if (gameState?.status !== 'active') return;
   const input = document.getElementById('motcleInput');
   const errEl = document.getElementById('motcleErr');
   if (!input) { console.warn('motcleInput introuvable'); return; }
@@ -1199,8 +1217,8 @@ async function validerMotcle() {
   const virtualNowV = HV + (Date.now()-HV)*multV;
   const schedV = computePhaseFromSchedule(HV, parcours);
   const remainingV = (schedV.phaseEnd - virtualNowV) / 1000;
-  // Score = 0 si temps écoulé, sinon basé sur indices montrés
-  const shown = Math.min(5, teamState?.indices_shown || 0);
+  // Score = 0 si temps écoulé, sinon basé sur le nombre d'indices affichés (calcul temporel)
+  const shown = Math.min(5, indicesAffichesNow(schedV));
   const scoreEtape = remainingV <= 0 ? 0 : Math.max(0, 10 - shown * 2);
 
   // 1. Mettre à jour teamState LOCAL immédiatement
@@ -1219,9 +1237,10 @@ async function validerMotcle() {
     total_score: totalLocal,
   });
 
-  // 2. Afficher l'écran de félicitations immédiatement
+  // 2. Re-render complet : met à jour la barre de progression (carré étape en bleu-gris
+  //    + total) ET affiche l'écran de félicitations (dispatch via etape_status='done').
   renderBloqueUntil = Date.now() + 3000;
-  renderAttenteFinEtape(scoreEtape, stepIdx, parcours);
+  renderTeamView();
 
   // 3. Sauvegarder TOUT en une seule requête atomique pour éviter les race conditions
   const scoresFinaux = {...scoresLocal};
@@ -1359,6 +1378,7 @@ async function loadPhotoThumb(photoId, imgElId) {
 let _lastSyncPhotos = 0;
 async function syncPhotosFromDB(epreuve) {
   if (!isCaptain) return;
+  if (gameState?.status !== 'active') return;
   // Throttle : ne pas appeler plus d'une fois par 2 secondes (le Realtime gère la fraîcheur)
   const now = Date.now();
   if (now - _lastSyncPhotos < 2000) return;
@@ -1418,20 +1438,61 @@ async function syncPhotosFromDB(epreuve) {
   const oldStr = JSON.stringify(oldState);
   const newStr = JSON.stringify(state);
 
+  // Pas de pop-up : l'affichage des vignettes et de leur statut suffit. On se contente
+  // de réaligner l'état local + base et de re-render quand quelque chose a changé.
   if (oldStr !== newStr) {
     if (oldState.ch1?.done && !state.ch1.done) state.ch1.done = true;
     if (oldState.ch2?.done && !state.ch2.done) state.ch2.done = true;
+
     teamState.reponse_epreuve = JSON.stringify(state);
-    // Sauvegarder uniquement le score (pas reponse_epreuve)
+    // PERSISTER reponse_epreuve : la table photos est la source de vérité, on réaligne
+    // jp_team_states pour qu'un écho Realtime ne revienne pas à l'état « en attente »
+    // (ce qui rebloquait la soumission d'un nouvel essai).
+    await db.from('jp_team_states').update({reponse_epreuve: JSON.stringify(state)}).eq('equipe_nom', currentTeam);
+    // Sauvegarder le score
     const total = (state.ch1.points||0) + (state.ch2.points||0);
     const currentScore = (getScores()['ep_'+ (teamState.step_idx||0)] || 0);
     if (total !== currentScore) {
       await saveScore('ep_'+ (teamState.step_idx||0), total);
     }
-    // Re-render uniquement si le state local a vraiment besoin d'être actualisé
-    // Pas d'appel direct à renderTeamView pour éviter les boucles
-    // Le prochain poll ou Realtime déclenchera le render naturellement
+    // Re-render pour afficher le refus/validation et le bouton de nouvel essai.
+    renderTeamView();
   }
+}
+
+// Quand l'appli redevient visible (retour après la prise de photo sur mobile, qui met
+// l'onglet en arrière-plan et gèle les timers), forcer une resynchro immédiate. C'était
+// la cause du « il faut rafraîchir » sur la 1re photo.
+let _visibilityHooked = false;
+function hookPhotoVisibility() {
+  if (_visibilityHooked) return;
+  _visibilityHooked = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    _lastSyncPhotos = 0;
+    renderTeamView();
+  });
+}
+
+let _photoPollTimer = null, _photoPollBloc = -1;
+function startPhotoPolling(epreuve) {
+  hookPhotoVisibility();
+  if (!isCaptain) return;
+  const cur = (()=>{ const p=getParcours(); const H=gameState?.started_at?new Date(gameState.started_at).getTime():Date.now(); return p.length?computePhaseFromSchedule(H,p).blocIdx:-1; })();
+  if (_photoPollTimer && _photoPollBloc === cur) return;
+  if (_photoPollTimer) { clearInterval(_photoPollTimer); _photoPollTimer = null; }
+  _photoPollBloc = cur;
+  _photoPollTimer = setInterval(() => {
+    // S'arrêter si on n'est plus sur l'épreuve photo de ce bloc
+    const parcours = getParcours();
+    const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
+    const sched = parcours.length ? computePhaseFromSchedule(H, parcours) : {phase:null};
+    if (sched.phase !== 'epreuve' || sched.blocIdx !== _photoPollBloc) {
+      clearInterval(_photoPollTimer); _photoPollTimer = null; _photoPollBloc = -1; return;
+    }
+    _lastSyncPhotos = 0; // forcer la resynchro (bypass throttle)
+    syncPhotosFromDB(epreuve);
+  }, 4000);
 }
 
 function renderEpreuvePhoto(epreuve) {
@@ -1443,6 +1504,10 @@ function renderEpreuvePhoto(epreuve) {
 
   // Synchroniser avec la table photos (statuts mis à jour par l'admin)
   syncPhotosFromDB(epreuve);
+  // Poll de secours : le Realtime sur la table photos ne délivre pas toujours les
+  // UPDATE (validation/refus admin). On resynchronise donc régulièrement tant qu'on
+  // est sur l'épreuve photo, pour notifier le joueur quasi en temps réel.
+  startPhotoPolling(epreuve);
 
   // Timing : 5 minutes par challenge
   // Challenge 1 = première moitié du temps, Challenge 2 = seconde moitié
@@ -1505,16 +1570,28 @@ function renderEpreuvePhoto(epreuve) {
     else if(st.done) statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--danger)">✗ ${used>=MAX_AT?'5 essais épuisés':'Temps écoulé'} — 0 point</div>`;
     else if(last?.statut==='refusee') statusHtml=`<div style="padding:8px 14px;font-size:13px;color:var(--danger)">Photo refusée — essai ${used+1} disponible (max ${POINTS_PHOTO[used]||0} pts)</div>`;
 
+    // Afficher TOUTES les photos déjà envoyées (y compris en attente) pour que le
+    // joueur garde une trace de ce qu'il a soumis et n'envoie pas deux fois la même.
     let photoHtml = '';
-    if(last && last.statut!=='en_attente' && last.id) {
-      // Charger la photo à la demande via son ID (image lazy)
-      const imgId = 'photo_thumb_'+last.id;
-      photoHtml = `<div style="padding:0 14px 10px">
-        <img id="${imgId}" src="" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--cream);min-height:60px">
-        <div style="font-size:12px;font-weight:500;color:${last.statut==='validee'?'var(--success)':'var(--danger)'};margin-top:4px">${last.statut==='validee'?`✓ Validée — +${last.points||0} pts`:'✗ Refusée'}</div>
-      </div>`;
-      // Charger après render
-      setTimeout(() => loadPhotoThumb(last.id, imgId), 0);
+    const envoyees = st.attempts.filter(a => a && a.id);
+    if (envoyees.length) {
+      const vignettes = envoyees.map(a => {
+        const imgId = 'photo_thumb_'+a.id;
+        const lbl = a.statut==='validee' ? '✓ Validée'
+                  : a.statut==='refusee' ? '✗ Refusée'
+                  : '⏳ En attente';
+        const ptsLbl = a.statut==='validee' ? ` +${a.points||0} pts` : '';
+        // Fond coloré selon le statut : vert=validée, rouge=refusée, gris=en attente
+        const bg  = a.statut==='validee' ? 'var(--success-bg)' : a.statut==='refusee' ? 'var(--danger-bg)' : 'var(--cream)';
+        const bdr = a.statut==='validee' ? 'var(--success)'    : a.statut==='refusee' ? 'var(--danger)'    : 'var(--border-strong)';
+        const col = a.statut==='validee' ? 'var(--success)'    : a.statut==='refusee' ? 'var(--danger)'    : 'var(--ink-muted)';
+        setTimeout(() => loadPhotoThumb(a.id, imgId), 0);
+        return `<div style="flex:0 0 96px;background:${bg};border:2px solid ${bdr};border-radius:var(--radius-sm);padding:5px">
+          <img id="${imgId}" src="" style="width:100%;height:84px;object-fit:cover;border-radius:4px;background:rgba(0,0,0,.04)">
+          <div style="font-size:11px;font-weight:600;color:${col};margin-top:4px;text-align:center;line-height:1.3">Essai ${st.attempts.indexOf(a)+1}<br>${lbl}${ptsLbl}</div>
+        </div>`;
+      }).join('');
+      photoHtml = `<div style="display:flex;gap:8px;overflow-x:auto;padding:0 14px 10px">${vignettes}</div>`;
     }
 
     const pts = st.done ? (st.points>0?`+${st.points} pts`:'0 pt') : `max ${POINTS_PHOTO[used]||0} pts`;
@@ -1536,11 +1613,9 @@ function renderEpreuvePhoto(epreuve) {
   }
 
   const total = (state.ch1.points||0) + (state.ch2.points||0);
-  // Ch2 affiché uniquement quand ch1 terminé
+  // Ch2 affiché uniquement quand ch1 terminé. (Les règles ne sont PAS affichées ici :
+  // elles sont accessibles via « Voir les règles » ajouté par renderEpreuveSchedule.)
   return `
-    <div class="card" style="margin-bottom:10px">
-      <div style="font-size:14px;color:var(--ink-soft);line-height:1.7">${epreuve.instructions||''}</div>
-    </div>
     ${challengeBlock(1, state.ch1, 'Caroline', false)}
     ${ch2Available ? challengeBlock(2, state.ch2, 'Marc', false) : `<div class="card" style="margin-bottom:10px;opacity:.6"><div style="font-size:14px;font-weight:500;margin-bottom:6px">Challenge 2 — Marc</div><div style="font-size:13px;color:var(--ink-muted)">🔒 Disponible après le challenge Caroline</div></div>`}
     <div class="card" style="text-align:center">
@@ -1551,6 +1626,7 @@ function renderEpreuvePhoto(epreuve) {
 
 async function soumettrePhoto(chNum, input) {
   if (!isCaptain || !input.files[0]) return;
+  if (gameState?.status !== 'active') return;
   const reader = new FileReader();
   reader.onload = async e => {
     const state = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
@@ -1649,31 +1725,62 @@ async function pbSaisir(lettre, valeur) {
 
 // ---- Épreuve QCM (Anecdotes Mariés) ----
 function renderEpreuveQCM(epreuve) {
+  // Le « quizz des mariés » (type qcm) = les anecdotes « Celui qui… » (Lui / Elle / Les 2),
+  // configurées dans la table anecdotes côté admin.
+  const anecdotes = (appData.anecdotes||[]).slice().sort((a,b)=>(a.ordre||0)-(b.ordre||0));
   const qIdx = teamState.question_idx || 0;
   const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
-  const questions = epreuve.questions || [];
-  if (!questions.length) return `<div class="card"><p style="font-size:14px">${epreuve.instructions||'Pas de questions configurées.'}</p></div>`;
-  if (qIdx >= questions.length) return `<div class="card" style="text-align:center"><div style="font-size:28px;margin-bottom:8px">✅</div><div style="font-size:15px;font-weight:500">Toutes les questions répondues !</div></div>`;
-  const q = questions[qIdx];
-  const opts = q.opts || q.options || [];
-  const alreadyAnswered = reponses[qIdx] !== undefined;
+  if (!anecdotes.length) return `<div class="card"><p style="font-size:14px">${epreuve.instructions||'Pas de questions configurées.'}</p></div>`;
+  if (qIdx >= anecdotes.length) {
+    const bons = anecdotes.filter((a,i)=>reponses[i]===a.reponse).length;
+    return `<div class="card" style="text-align:center">
+      <div style="font-size:28px;margin-bottom:8px">✅</div>
+      <div style="font-size:15px;font-weight:500">Toutes les questions répondues !</div>
+      <div style="font-size:13px;color:var(--ink-muted);margin-top:6px">${bons} / ${anecdotes.length} bonne${bons!==1?'s':''} réponse${bons!==1?'s':''}</div>
+    </div>`;
+  }
+  const a = anecdotes[qIdx];
+  const opts = ['Lui','Elle','Les 2'];
+  const chosen = reponses[qIdx];
+  const answered = chosen !== undefined;
+  const optBtns = opts.map(label => {
+    let cls = '';
+    if (answered) {
+      if (label === a.reponse) cls = ' correct';
+      else if (label === chosen) cls = ' wrong';
+    }
+    return `<div class="anec-card${cls}" style="flex:1;text-align:center;margin-bottom:0" onclick="${(isCaptain&&!answered)?`repQCM('${label}')`:''}">
+      <div class="anec-text" style="font-weight:500">${label}</div>
+    </div>`;
+  }).join('');
+  let revealHtml='';
+  if (answered) {
+    const ok = chosen===a.reponse;
+    let inner = `<div style="font-weight:600;color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅ Bonne réponse !':'❌ Mauvaise réponse'}</div>`;
+    if (!ok) inner += `<div style="margin-top:4px">Bonne réponse : <strong>${a.reponse}</strong></div>`;
+    if (a.commentaire) inner += `<div style="margin-top:6px;color:var(--ink-soft)">💡 ${a.commentaire}</div>`;
+    revealHtml = `<div style="margin-top:12px;background:${ok?'var(--success-bg)':'var(--danger-bg)'};border:1px solid ${ok?'var(--success)':'var(--danger)'};border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;line-height:1.5">${inner}<div style="margin-top:8px;font-size:11px;color:var(--ink-muted)">⏭ Question suivante dans un instant…</div></div>`;
+    // Avancement automatique après la durée d'affichage configurée (capitaine)
+    if (isCaptain) {
+      const mult = gameState?.time_multiplier || 1;
+      scheduleTimer('qcm_next_'+(teamState.step_idx||0)+'_'+qIdx, Date.now()+Math.max(400, epreuveReveal(epreuve)*1000/mult), ()=>qcmSuivant());
+    }
+  }
   return `<div class="card">
-    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">Question ${qIdx+1} / ${questions.length}</div>
-    <div style="font-size:15px;font-weight:500;margin-bottom:16px;line-height:1.5">${q.q||q.question||''}</div>
-    ${opts.map((opt,i)=>`
-      <div class="anec-card${alreadyAnswered ? (i===(q.correct||0)?' correct':(reponses[qIdx]===i?' wrong':'')) : ''}"
-        onclick="${isCaptain&&!alreadyAnswered?`repQCM(${i})`:''}">
-        <div class="anec-text">${opt}</div>
-      </div>`).join('')}
-    ${alreadyAnswered&&isCaptain?`<button class="btn btn-gold btn-full" style="margin-top:12px" onclick="qcmSuivant()">Question suivante →</button>`:''}
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px">Question ${qIdx+1} / ${anecdotes.length}</div>
+    <div style="font-size:11px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Celui qui…</div>
+    <div style="font-size:17px;font-weight:500;font-family:'Playfair Display',serif;margin-bottom:14px;line-height:1.4">${a.celui_qui||''}</div>
+    <div style="display:flex;gap:8px">${optBtns}</div>
+    ${revealHtml}
   </div>`;
 }
 
-async function repQCM(optIdx) {
+async function repQCM(rep) {
   if (!isCaptain) return;
   const reponses = (()=>{try{return JSON.parse(teamState.reponse_epreuve||'{}');}catch(e){return {};}})();
   const qIdx = teamState.question_idx||0;
-  reponses[qIdx] = optIdx;
+  if (reponses[qIdx] !== undefined) return;
+  reponses[qIdx] = rep;
   await db.from('jp_team_states').update({reponse_epreuve:JSON.stringify(reponses)}).eq('equipe_nom',currentTeam);
   Object.assign(teamState, {reponse_epreuve:JSON.stringify(reponses)});
   renderTeamView();
@@ -1726,6 +1833,12 @@ function renderEpreuveFrise(epreuve) {
   const correct = reponses[qIdx+'_correct'];
   const choices = appData.joueurs.filter(jj=>jj.equipe_nom===currentTeam).sort((a,b)=>a.nom.localeCompare(b.nom));
 
+  // Avancement automatique après la durée d'affichage de la réponse (capitaine)
+  if (answered && isCaptain) {
+    const mult = gameState?.time_multiplier || 1;
+    scheduleTimer('frise_next_'+(teamState.step_idx||0)+'_'+qIdx, Date.now()+Math.max(400, epreuveReveal(epreuve)*1000/mult), ()=>friseSuivant());
+  }
+
   return `<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <span style="font-size:12px;color:var(--ink-muted)">Anecdote ${qIdx+1} / ${joueurs.length}</span>
@@ -1738,7 +1851,7 @@ function renderEpreuveFrise(epreuve) {
         <div style="font-size:15px;color:var(--ink)">C’était : <strong>${j.nom}</strong></div>
         ${j.commentaire?`<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">💬 ${j.commentaire}</div>`:''}
       </div>
-      ${isCaptain?'<button class="btn btn-gold btn-full" onclick="friseSuivant()">Anecdote suivante →</button>':'<div style="font-size:13px;color:var(--ink-muted);text-align:center">En attente du capitaine...</div>'}
+      <div style="font-size:11px;color:var(--ink-muted);text-align:center">⏭ Anecdote suivante dans un instant…</div>
     ` : `
       <div style="font-size:13px;font-weight:500;color:var(--ink-muted);margin-bottom:10px">À qui correspond cette anecdote ?</div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:12px">
@@ -1805,6 +1918,7 @@ async function friseSuivant() {
 
 
 async function terminerEpreuve(scoreEpreuve, forceStepIdx) {
+  if (gameState?.status !== 'active') return; // ne rien figer hors partie active
   pbState = null;
   const parcours = getParcours();
   const H = gameState?.started_at ? new Date(gameState.started_at).getTime() : Date.now();
@@ -1815,9 +1929,11 @@ async function terminerEpreuve(scoreEpreuve, forceStepIdx) {
 
   // Sauvegarder dans le dict nommé (jsonb)
   const scoresDict = getScores();
-  // Ne pas écraser un score étape existant
+  // Score d'étape : seul validerMotcle (mot-clé trouvé) l'enregistre. S'il est absent
+  // ici, c'est que le mot-clé n'a PAS été trouvé → 0 pt (et surtout pas score_etape,
+  // qui a été remis à 10 pour le bloc suivant).
   if (scoresDict['etape_'+stepIdx] === undefined) {
-    scoresDict['etape_'+stepIdx] = teamState?.score_etape ?? 0;
+    scoresDict['etape_'+stepIdx] = 0;
   }
   // Ne pas écraser ep_N si déjà sauvegardé (ex: sauvegardé en continu pendant l'épreuve)
   if (scoresDict['ep_'+stepIdx] === undefined || (scoreEpreuve ?? 0) > (scoresDict['ep_'+stepIdx] || 0)) {
@@ -1851,11 +1967,19 @@ async function terminerEpreuve(scoreEpreuve, forceStepIdx) {
 function renderDone() {
   stopTimer();
   document.getElementById('timerBand').style.display='none';
+  // Total recalculé depuis le dict des scores → cohérent avec la somme des petits carrés.
+  const sc = getScores();
+  const total = Object.entries(sc).reduce((acc,[k,v])=>/^(?:etape|ep)_\d+$/.test(k)?acc+(v||0):acc, 0);
   document.getElementById('teamContent').innerHTML = `
     <div class="done-block">
       <div style="font-size:48px;margin-bottom:16px">🎉</div>
-      <div class="done-score">${teamState?.total_score||0}</div>
+      <div class="done-score">${total}</div>
       <div style="font-size:14px;color:var(--ink-muted);margin-top:8px">points · toutes étapes terminées !</div>
+      <div style="margin-top:24px;background:var(--gold-light);border:1px solid var(--gold);border-radius:var(--radius);padding:16px 18px;max-width:340px">
+        <div style="font-size:22px;margin-bottom:6px">🏡</div>
+        <div style="font-size:16px;font-weight:500;font-family:'Playfair Display',serif;color:var(--gold-dark);margin-bottom:4px">Rendez-vous à la villa !</div>
+        <div style="font-size:13px;color:var(--ink-soft);line-height:1.6">Bravo à toutes les équipes 🎉<br>Rejoignez-nous à la villa pour la suite des festivités.</div>
+      </div>
     </div>`;
 }
 
@@ -1865,6 +1989,21 @@ let lastPhase = null;
 let lastBlocIdx = null;
 let motcleSaisi = ''; // préserver la saisie entre les renders
 let renderBloqueUntil = 0; // timestamp ms — bloquer les re-renders du poll jusqu'à ce moment
+
+// Détecte un reset (passage en 'waiting') ou le démarrage d'une NOUVELLE partie
+// (started_at change) → recharge la page pour repartir d'un état 100% propre. Sinon
+// une app joueur restée ouverte peut réécrire d'anciens scores en base juste après
+// le reset (avant d'être rechargée), ce qui « ressuscite » des scores parasites.
+let _jpStartedAt = undefined, _jpStatus = undefined;
+function checkGameRestart(gs){
+  const sa = gs?.started_at || null;
+  const stt = gs?.status || 'waiting';
+  if (_jpStartedAt === undefined) { _jpStartedAt = sa; _jpStatus = stt; return; }
+  const reset = (stt === 'waiting' && _jpStatus !== 'waiting');
+  const restart = (sa && sa !== _jpStartedAt);
+  if (reset || restart) { _jpStartedAt = sa; _jpStatus = stt; try{location.reload();}catch(e){} return; }
+  _jpStartedAt = sa; _jpStatus = stt;
+}
 
 // Registre des setTimeout actifs pour éviter les doublons
 // Clé = type+blocIdx+detail, valeur = {id, endsAt}
@@ -1903,6 +2042,9 @@ function getScores() {
   } catch(e) { return {}; }
 }
 async function saveScore(key, val) {
+  // Sécurité : ne jamais écrire un score si la partie n'est pas en cours (évite de
+  // « ressusciter » d'anciens scores après un reset, avant le rechargement de l'app).
+  if (gameState?.status !== 'active') return;
   const scores = getScores();
   scores[key] = val;
   // Calculer total uniquement sur les blocs joués
@@ -1949,15 +2091,22 @@ function subscribeRealtime() {
       .on('postgres_changes',{event:'*',schema:'public',table:'jp_team_states',filter:`equipe_nom=eq.${currentTeam}`}, p=>{
         if (!p.new) return;
         // Protection : ne pas écraser si etape_status='done' local mais pas encore en base
+        const sameStep    = (p.new.step_idx ?? -1) === (teamState?.step_idx ?? -1);
         const localDone   = teamState?.etape_status   === 'done' && p.new.etape_status   !== 'done';
         const localEpDone = teamState?.epreuve_status === 'done' && p.new.epreuve_status !== 'done';
         const localShown  = (teamState?.indices_shown||0) >= 6 && (p.new.indices_shown||0) < 6;
-        if (localDone || localEpDone || localShown) {
+        // Indices monotones : un écho Realtime hors-séquence ne doit jamais faire
+        // "reculer" le nombre d'indices déjà affichés sur la même étape, sinon le
+        // dernier indice apparaît puis disparaît (clignotement) et le score se décale.
+        const localMono   = sameStep && (teamState?.indices_shown||0) < 6
+                            && (p.new.indices_shown||0) < (teamState?.indices_shown||0);
+        if (localDone || localEpDone || localShown || localMono) {
           // Fusionner uniquement les champs sûrs (pas les statuts ni indices_shown)
           const safe = {...p.new};
           if (localDone)   { safe.etape_status   = teamState.etape_status;   safe.score_etape = teamState.score_etape; }
           if (localEpDone) { safe.epreuve_status = teamState.epreuve_status; }
           if (localShown)  { safe.indices_shown  = teamState.indices_shown;  }
+          if (localMono)   { safe.indices_shown  = teamState.indices_shown;  safe.score_etape = teamState.score_etape; }
           // Fusionner les scores : prendre le max
           const localScores = getScores();
           const newScores = typeof p.new.scores_etapes === 'object' ? p.new.scores_etapes : {};
@@ -1975,7 +2124,7 @@ function subscribeRealtime() {
       }).subscribe();
     const s2 = db.channel('jp-game-'+ts)
       .on('postgres_changes',{event:'*',schema:'public',table:'jp_game_state'}, p=>{
-        if (p.new) { gameState=p.new; renderTeamView(); }
+        if (p.new) { checkGameRestart(p.new); gameState=p.new; renderTeamView(); }
       }).subscribe();
     // Subscription photos (validation par admin)
     const sPhotos = db.channel('jp-photos-'+currentTeam+'-'+ts)
@@ -2011,6 +2160,7 @@ function subscribeRealtime() {
       ]);
       let changed = false;
 
+      if (gsRes.data) checkGameRestart(gsRes.data);
       if (gsRes.data && gsRes.data.status !== gameState?.status) {
         gameState = gsRes.data; changed = true;
       }
@@ -2063,10 +2213,23 @@ function subscribeRealtime() {
             const prevPhase   = lastPhase;
             const prevBlocIdx = lastBlocIdx;
 
-            // Transition : fin d'épreuve (changement de bloc)
-            // Seulement si prevBlocIdx correspond vraiment au bloc en cours en base
+            // Transition : on QUITTE la phase étape (étape→règles, même bloc) sans avoir
+            // validé le mot-clé → 0 pt pour l'étape, enregistré IMMÉDIATEMENT. (Le score
+            // n'est gagné que via validerMotcle, qui aurait déjà rempli scores_etapes.)
+            if (prevPhase === 'etape' && s2.phase !== 'etape' && prevBlocIdx !== null && isCaptain) {
+              const sc0 = getScores();
+              if (sc0['etape_'+prevBlocIdx] === undefined || sc0['etape_'+prevBlocIdx] === null) {
+                saveScore('etape_'+prevBlocIdx, 0);
+                db.from('jp_team_states').update({etape_status:'done', score_etape:0}).eq('equipe_nom',currentTeam);
+                if (teamState) teamState.etape_status = 'done';
+              }
+            }
+
+            // Transition : fin d'épreuve (changement de bloc OU passage en 'done' pour
+            // le dernier bloc — où s2.blocIdx reste égal au dernier index).
             const stepIdxBase = teamState?.step_idx ?? 0;
-            if (prevBlocIdx !== null && s2.blocIdx !== prevBlocIdx && teamState?.epreuve_status !== 'done'
+            const finEpreuve = (s2.blocIdx !== prevBlocIdx || (s2.phase === 'done' && prevPhase === 'epreuve'));
+            if (prevBlocIdx !== null && finEpreuve && teamState?.epreuve_status !== 'done'
                 && stepIdxBase === prevBlocIdx && isCaptain) {
               const p3 = getParcours();
               const b3 = p3[prevBlocIdx];
@@ -2087,10 +2250,10 @@ function subscribeRealtime() {
                 && stepIdxBase === prevBlocIdx && isCaptain) {
               const existingScore = getScores()['etape_'+prevBlocIdx];
               if (existingScore === undefined || existingScore === null) {
-                const shownNow = Math.min(5, teamState?.indices_shown || 0);
-                const scoreNow = Math.max(0, 10 - shownNow * 2);
-                saveScore('etape_'+prevBlocIdx, scoreNow);
-                db.from('jp_team_states').update({etape_status:'done', score_etape:scoreNow}).eq('equipe_nom',currentTeam);
+                // Étape quittée sans valider le mot-clé → 0 pt (le score n'est gagné
+                // que via validerMotcle).
+                saveScore('etape_'+prevBlocIdx, 0);
+                db.from('jp_team_states').update({etape_status:'done', score_etape:0}).eq('equipe_nom',currentTeam);
               } else {
                 db.from('jp_team_states').update({etape_status:'done'}).eq('equipe_nom',currentTeam);
               }
