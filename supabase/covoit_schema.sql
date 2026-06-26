@@ -5,7 +5,7 @@
 -- A exécuter dans l'éditeur SQL de Supabase (SQL Editor > New query > Run).
 -- ============================================================================
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ----------------------------------------------------------------------------
 -- Table des invités
@@ -79,7 +79,7 @@ create policy locations_select_all on locations for select using (true);
 -- ----------------------------------------------------------------------------
 create or replace function get_guest_status(p_identifier text)
 returns table(guest_id uuid, first_name text, last_name text, has_code boolean, has_vehicle boolean)
-language sql security definer set search_path = public as $$
+language sql security definer set search_path = public, extensions as $$
   select id, first_name, last_name, (pin_hash is not null), has_vehicle
   from guests
   where lower(email) = lower(p_identifier) or phone = p_identifier
@@ -91,7 +91,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function set_guest_code(p_identifier text, p_code text)
 returns table(guest_id uuid, first_name text, last_name text, has_vehicle boolean)
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_id uuid;
   v_has_pin boolean;
@@ -124,7 +124,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function verify_guest_code(p_identifier text, p_code text)
 returns table(guest_id uuid, first_name text, last_name text, has_vehicle boolean)
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_id uuid;
   v_hash text;
@@ -161,7 +161,7 @@ create or replace function create_ride_request(
   p_nb_persons integer,
   p_has_luggage boolean
 ) returns uuid
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_ride_id uuid;
 begin
@@ -196,7 +196,7 @@ returns table(
   status text, driver_id uuid, driver_first_name text, driver_last_name text,
   driver_phone text, driver_comment text
 )
-language sql security definer set search_path = public as $$
+language sql security definer set search_path = public, extensions as $$
   select
     r.id, r.ride_date, r.ride_time,
     coalesce(dl.name, r.departure_custom) as departure_name,
@@ -223,7 +223,7 @@ returns table(
   nb_persons integer, has_luggage boolean,
   requester_first_name text, requester_last_name text
 )
-language sql security definer set search_path = public as $$
+language sql security definer set search_path = public, extensions as $$
   select
     r.id, r.ride_date, r.ride_time,
     coalesce(dl.name, r.departure_custom),
@@ -249,7 +249,7 @@ returns table(
   status text, driver_comment text,
   requester_first_name text, requester_last_name text, requester_phone text
 )
-language sql security definer set search_path = public as $$
+language sql security definer set search_path = public, extensions as $$
   select
     r.id, r.ride_date, r.ride_time,
     coalesce(dl.name, r.departure_custom),
@@ -270,7 +270,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function propose_ride(p_driver_id uuid, p_ride_id uuid, p_comment text)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   update ride_requests
   set driver_id = p_driver_id, driver_comment = p_comment,
@@ -288,7 +288,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function update_driver_comment(p_driver_id uuid, p_ride_id uuid, p_comment text)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   update ride_requests
   set driver_comment = p_comment, updated_at = now()
@@ -305,7 +305,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function cancel_driver_proposal(p_driver_id uuid, p_ride_id uuid)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   update ride_requests
   set driver_id = null, driver_comment = null, status = 'pending', updated_at = now()
@@ -322,7 +322,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function confirm_ride(p_requester_id uuid, p_ride_id uuid)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   update ride_requests
   set status = 'confirmed', updated_at = now()
@@ -339,7 +339,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function reject_ride_proposal(p_requester_id uuid, p_ride_id uuid)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   update ride_requests
   set driver_id = null, driver_comment = null, status = 'pending', updated_at = now()
@@ -356,7 +356,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace function cancel_ride_request(p_requester_id uuid, p_ride_id uuid)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   update ride_requests
   set status = 'cancelled', updated_at = now()
