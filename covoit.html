@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Covoiturage Mariage</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --primary: #b8860b;
+    --primary-dark: #8a6508;
+    --bg: #faf7f2;
+    --card: #ffffff;
+    --text: #2b2b2b;
+    --muted: #777;
+    --border: #e3ddd2;
+    --pending: #e0a800;
+    --proposed: #0d6efd;
+    --confirmed: #198754;
+    --cancelled: #aaa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 70px;
+  }
+  header {
+    background: var(--primary);
+    color: #fff;
+    padding: 16px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { margin: 0; font-size: 1.2rem; }
+  header .sub { font-size: 0.8rem; opacity: 0.9; }
+  main { max-width: 480px; margin: 0 auto; padding: 16px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .card h2 { margin: 0 0 12px; font-size: 1rem; color: var(--primary-dark); }
+  label { display: block; font-size: 0.85rem; margin: 10px 0 4px; color: var(--muted); }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #fff;
+    color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .pin-input {
+    text-align: center;
+    font-size: 1.6rem;
+    letter-spacing: 0.4em;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 1rem;
+    font-weight: 600;
+    width: 100%;
+    margin-top: 12px;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:active { background: var(--primary-dark); }
+  .btn-secondary { background: #eee; color: var(--text); }
+  .btn-danger { background: #dc3545; color: #fff; }
+  .btn-small { width: auto; padding: 8px 12px; font-size: 0.85rem; margin: 4px 4px 0 0; display: inline-block; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .error { color: #c0392b; font-size: 0.85rem; margin-top: 8px; }
+  .info { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+  .hidden { display: none !important; }
+  .tabbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    z-index: 10;
+  }
+  .tabbar button {
+    flex: 1;
+    margin: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--muted);
+    padding: 10px 4px;
+    font-size: 0.8rem;
+  }
+  .tabbar button.active { color: var(--primary); font-weight: 700; }
+  .ride-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .ride-item .meta { font-size: 0.8rem; color: var(--muted); }
+  .ride-item .route { font-weight: 600; margin: 4px 0; }
+  .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    color: #fff;
+    text-transform: uppercase;
+  }
+  .badge-pending { background: var(--pending); }
+  .badge-proposed { background: var(--proposed); }
+  .badge-confirmed { background: var(--confirmed); }
+  .badge-cancelled { background: var(--cancelled); }
+  .comment-box {
+    background: #f3f0ea;
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 0.85rem;
+    margin-top: 6px;
+  }
+  .top-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .top-actions span { font-size: 0.9rem; }
+  .top-actions a { font-size: 0.8rem; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .checkbox-row input { width: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚗 Covoiturage du mariage</h1>
+  <div class="sub" id="headerSub">Connectez-vous pour gérer vos trajets</div>
+</header>
+
+<main id="app"></main>
+
+<nav class="tabbar hidden" id="tabbar">
+  <button id="tabRequests" class="active">Mes trajets</button>
+  <button id="tabDriver" class="hidden">Chauffeur</button>
+  <button id="tabLogout">Déconnexion</button>
+</nav>
+
+<script>
+const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY"; // <-- à remplacer par la clé "anon public" du projet Supabase
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const STORAGE_KEY = "covoit_guest";
+let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+let locations = [];
+let currentTab = "requests";
+
+const app = document.getElementById("app");
+const headerSub = document.getElementById("headerSub");
+const tabbar = document.getElementById("tabbar");
+const tabRequests = document.getElementById("tabRequests");
+const tabDriver = document.getElementById("tabDriver");
+const tabLogout = document.getElementById("tabLogout");
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function fmtDate(d) {
+  const [y,m,day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+function fmtTime(t) { return t ? t.slice(0,5) : ""; }
+
+function saveGuest(g) {
+  guest = g;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(g));
+}
+function logout() {
+  guest = null;
+  localStorage.removeItem(STORAGE_KEY);
+  render();
+}
+
+tabRequests.onclick = () => { currentTab = "requests"; render(); };
+tabDriver.onclick = () => { currentTab = "driver"; render(); };
+tabLogout.onclick = logout;
+
+async function loadLocations() {
+  if (locations.length) return locations;
+  const { data, error } = await sb.from("locations").select("id,name").order("sort_order");
+  if (!error) locations = data || [];
+  return locations;
+}
+
+function locationOptions(selectedId) {
+  let html = `<option value="">-- choisir --</option>`;
+  for (const l of locations) {
+    html += `<option value="${l.id}" ${l.id === selectedId ? "selected" : ""}>${escapeHtml(l.name)}</option>`;
+  }
+  html += `<option value="__custom__">Autre (préciser)</option>`;
+  return html;
+}
+
+async function render() {
+  if (!guest) {
+    tabbar.classList.add("hidden");
+    headerSub.textContent = "Connectez-vous pour gérer vos trajets";
+    renderLogin();
+    return;
+  }
+  tabbar.classList.remove("hidden");
+  headerSub.textContent = `Bonjour ${guest.first_name} !`;
+  tabDriver.classList.toggle("hidden", !guest.has_vehicle);
+  tabRequests.classList.toggle("active", currentTab === "requests");
+  tabDriver.classList.toggle("active", currentTab === "driver");
+
+  await loadLocations();
+
+  if (currentTab === "driver" && guest.has_vehicle) {
+    await renderDriverTab();
+  } else {
+    await renderRequestsTab();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// LOGIN
+// ---------------------------------------------------------------------------
+function renderLogin() {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Connexion</h2>
+      <div id="loginStep1">
+        <label for="identifier">Email ou numéro de téléphone</label>
+        <input id="identifier" type="text" placeholder="ex: marie.dupont@email.com" autocomplete="username" />
+        <button class="btn-primary" id="btnContinue">Continuer</button>
+        <div class="error hidden" id="loginError1"></div>
+      </div>
+      <div id="loginStep2" class="hidden"></div>
+    </div>
+  `;
+  document.getElementById("btnContinue").onclick = handleIdentifierSubmit;
+  document.getElementById("identifier").addEventListener("keydown", e => {
+    if (e.key === "Enter") handleIdentifierSubmit();
+  });
+}
+
+let pendingIdentifier = null;
+
+async function handleIdentifierSubmit() {
+  const identifier = document.getElementById("identifier").value.trim();
+  const errEl = document.getElementById("loginError1");
+  errEl.classList.add("hidden");
+  if (!identifier) return;
+
+  const { data, error } = await sb.rpc("get_guest_status", { p_identifier: identifier });
+  if (error || !data || data.length === 0) {
+    errEl.textContent = "Aucun invité trouvé avec cet email/téléphone. Vérifiez la saisie.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  pendingIdentifier = identifier;
+  const info = data[0];
+  document.getElementById("loginStep1").classList.add("hidden");
+  const step2 = document.getElementById("loginStep2");
+  step2.classList.remove("hidden");
+
+  if (!info.has_code) {
+    step2.innerHTML = `
+      <p>Bonjour ${escapeHtml(info.first_name)} ! Première connexion : définissez votre code à 6 chiffres.</p>
+      <input id="pinCode" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
+      <input id="pinCodeConfirm" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="confirmer" />
+      <button class="btn-primary" id="btnSetCode">Définir mon code</button>
+      <div class="error hidden" id="loginError2"></div>
+    `;
+    document.getElementById("btnSetCode").onclick = handleSetCode;
+  } else {
+    step2.innerHTML = `
+      <p>Bonjour ${escapeHtml(info.first_name)} ! Entrez votre code à 6 chiffres.</p>
+      <input id="pinCode" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
+      <button class="btn-primary" id="btnVerifyCode">Valider</button>
+      <div class="error hidden" id="loginError2"></div>
+    `;
+    document.getElementById("btnVerifyCode").onclick = handleVerifyCode;
+    document.getElementById("pinCode").addEventListener("keydown", e => {
+      if (e.key === "Enter") handleVerifyCode();
+    });
+  }
+}
+
+async function handleSetCode() {
+  const code = document.getElementById("pinCode").value.trim();
+  const confirm = document.getElementById("pinCodeConfirm").value.trim();
+  const errEl = document.getElementById("loginError2");
+  errEl.classList.add("hidden");
+  if (!/^[0-9]{6}$/.test(code)) {
+    errEl.textContent = "Le code doit comporter exactement 6 chiffres.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (code !== confirm) {
+    errEl.textContent = "Les deux codes ne correspondent pas.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const { data, error } = await sb.rpc("set_guest_code", { p_identifier: pendingIdentifier, p_code: code });
+  if (error || !data || data.length === 0) {
+    errEl.textContent = "Impossible de définir le code. Réessayez.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const g = data[0];
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle });
+  currentTab = "requests";
+  render();
+}
+
+async function handleVerifyCode() {
+  const code = document.getElementById("pinCode").value.trim();
+  const errEl = document.getElementById("loginError2");
+  errEl.classList.add("hidden");
+  if (!/^[0-9]{6}$/.test(code)) {
+    errEl.textContent = "Le code doit comporter exactement 6 chiffres.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const { data, error } = await sb.rpc("verify_guest_code", { p_identifier: pendingIdentifier, p_code: code });
+  if (error || !data || data.length === 0) {
+    errEl.textContent = "Code incorrect.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const g = data[0];
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle });
+  currentTab = "requests";
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// MES TRAJETS (demandeur)
+// ---------------------------------------------------------------------------
+function statusBadge(status) {
+  const labels = { pending: "En attente", proposed: "Proposition", confirmed: "Confirmé", cancelled: "Annulé" };
+  return `<span class="badge badge-${status}">${labels[status] || status}</span>`;
+}
+
+async function renderRequestsTab() {
+  app.innerHTML = `
+    <div class="card" id="newRideCard">
+      <h2>Nouvelle demande de trajet</h2>
+      <form id="newRideForm">
+        <div class="row">
+          <div>
+            <label for="rideDate">Date</label>
+            <input id="rideDate" type="date" required />
+          </div>
+          <div>
+            <label for="rideTime">Heure</label>
+            <input id="rideTime" type="time" required />
+          </div>
+        </div>
+
+        <label for="departureSelect">Lieu de départ</label>
+        <select id="departureSelect">${locationOptions(null)}</select>
+        <input id="departureCustom" type="text" placeholder="Préciser le lieu de départ" class="hidden" style="margin-top:6px;" />
+
+        <label for="arrivalSelect">Lieu d'arrivée</label>
+        <select id="arrivalSelect">${locationOptions(null)}</select>
+        <input id="arrivalCustom" type="text" placeholder="Préciser le lieu d'arrivée" class="hidden" style="margin-top:6px;" />
+
+        <label for="nbPersons">Nombre de personnes</label>
+        <input id="nbPersons" type="number" min="1" max="8" value="1" required />
+
+        <div class="checkbox-row">
+          <input id="hasLuggage" type="checkbox" />
+          <label for="hasLuggage" style="margin:0;">Avec bagages</label>
+        </div>
+
+        <button class="btn-primary" type="submit">Envoyer la demande</button>
+        <div class="error hidden" id="newRideError"></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Mes demandes</h2>
+      <div id="myRidesList"><p class="info">Chargement...</p></div>
+    </div>
+  `;
+
+  document.getElementById("departureSelect").onchange = (e) => {
+    document.getElementById("departureCustom").classList.toggle("hidden", e.target.value !== "__custom__");
+  };
+  document.getElementById("arrivalSelect").onchange = (e) => {
+    document.getElementById("arrivalCustom").classList.toggle("hidden", e.target.value !== "__custom__");
+  };
+
+  document.getElementById("newRideForm").onsubmit = async (e) => {
+    e.preventDefault();
+    await handleCreateRide();
+  };
+
+  await refreshMyRides();
+}
+
+async function handleCreateRide() {
+  const errEl = document.getElementById("newRideError");
+  errEl.classList.add("hidden");
+
+  const date = document.getElementById("rideDate").value;
+  const time = document.getElementById("rideTime").value;
+  const depSelect = document.getElementById("departureSelect").value;
+  const depCustom = document.getElementById("departureCustom").value.trim();
+  const arrSelect = document.getElementById("arrivalSelect").value;
+  const arrCustom = document.getElementById("arrivalCustom").value.trim();
+  const nbPersons = parseInt(document.getElementById("nbPersons").value, 10);
+  const hasLuggage = document.getElementById("hasLuggage").checked;
+
+  if (!date || !time) {
+    errEl.textContent = "Merci de renseigner la date et l'heure.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (!depSelect || (depSelect === "__custom__" && !depCustom)) {
+    errEl.textContent = "Merci de renseigner le lieu de départ.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (!arrSelect || (arrSelect === "__custom__" && !arrCustom)) {
+    errEl.textContent = "Merci de renseigner le lieu d'arrivée.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+
+  const { error } = await sb.rpc("create_ride_request", {
+    p_requester_id: guest.id,
+    p_ride_date: date,
+    p_ride_time: time,
+    p_departure_location_id: depSelect === "__custom__" ? null : depSelect,
+    p_departure_custom: depSelect === "__custom__" ? depCustom : null,
+    p_arrival_location_id: arrSelect === "__custom__" ? null : arrSelect,
+    p_arrival_custom: arrSelect === "__custom__" ? arrCustom : null,
+    p_nb_persons: nbPersons,
+    p_has_luggage: hasLuggage
+  });
+
+  if (error) {
+    errEl.textContent = "Erreur lors de l'envoi de la demande.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+
+  document.getElementById("newRideForm").reset();
+  document.getElementById("departureCustom").classList.add("hidden");
+  document.getElementById("arrivalCustom").classList.add("hidden");
+  await refreshMyRides();
+}
+
+async function refreshMyRides() {
+  const listEl = document.getElementById("myRidesList");
+  const { data, error } = await sb.rpc("list_my_ride_requests", { p_requester_id: guest.id });
+  if (error) {
+    listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`;
+    return;
+  }
+  if (!data || data.length === 0) {
+    listEl.innerHTML = `<p class="info">Vous n'avez pas encore de demande de trajet.</p>`;
+    return;
+  }
+  listEl.innerHTML = data.map(r => {
+    let actions = "";
+    if (r.status === "proposed") {
+      actions = `
+        <div class="comment-box">
+          <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong> propose de vous prendre en charge.
+          ${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}
+        </div>
+        <button class="btn-primary btn-small" onclick="confirmRide('${r.id}')">Accepter</button>
+        <button class="btn-secondary btn-small" onclick="rejectRide('${r.id}')">Refuser</button>
+      `;
+    } else if (r.status === "confirmed") {
+      actions = `
+        <div class="comment-box">
+          Trajet confirmé avec <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong>
+          ${r.driver_phone ? ` — 📞 ${escapeHtml(r.driver_phone)}` : ""}
+          ${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}
+        </div>
+      `;
+    } else if (r.status === "pending") {
+      actions = `<button class="btn-danger btn-small" onclick="cancelMyRide('${r.id}')">Annuler la demande</button>`;
+    }
+    return `
+      <div class="ride-item">
+        <div class="top-actions">
+          ${statusBadge(r.status)}
+          <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+        </div>
+        <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
+        <div class="meta">${r.nb_persons} pers. ${r.has_luggage ? "· avec bagages" : ""}</div>
+        ${actions}
+      </div>
+    `;
+  }).join("");
+}
+
+async function confirmRide(rideId) {
+  const { error } = await sb.rpc("confirm_ride", { p_requester_id: guest.id, p_ride_id: rideId });
+  if (!error) await refreshMyRides();
+}
+async function rejectRide(rideId) {
+  const { error } = await sb.rpc("reject_ride_proposal", { p_requester_id: guest.id, p_ride_id: rideId });
+  if (!error) await refreshMyRides();
+}
+async function cancelMyRide(rideId) {
+  if (!confirm("Annuler cette demande de trajet ?")) return;
+  const { error } = await sb.rpc("cancel_ride_request", { p_requester_id: guest.id, p_ride_id: rideId });
+  if (!error) await refreshMyRides();
+}
+
+// ---------------------------------------------------------------------------
+// MODE CHAUFFEUR
+// ---------------------------------------------------------------------------
+async function renderDriverTab() {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Trajets disponibles</h2>
+      <div id="availableRidesList"><p class="info">Chargement...</p></div>
+    </div>
+    <div class="card">
+      <h2>Mes prises en charge</h2>
+      <div id="myDrivenRidesList"><p class="info">Chargement...</p></div>
+    </div>
+  `;
+  await refreshAvailableRides();
+  await refreshMyDrivenRides();
+}
+
+async function refreshAvailableRides() {
+  const listEl = document.getElementById("availableRidesList");
+  const { data, error } = await sb.rpc("list_available_rides", { p_driver_id: guest.id });
+  if (error) {
+    listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`;
+    return;
+  }
+  if (!data || data.length === 0) {
+    listEl.innerHTML = `<p class="info">Aucun trajet disponible pour le moment.</p>`;
+    return;
+  }
+  listEl.innerHTML = data.map(r => `
+    <div class="ride-item">
+      <div class="top-actions">
+        ${statusBadge("pending")}
+        <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+      </div>
+      <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
+      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)} · ${r.nb_persons} pers. ${r.has_luggage ? "· avec bagages" : ""}</div>
+      <label for="comment-${r.id}" style="margin-top:8px;">Commentaire / conditions (optionnel)</label>
+      <textarea id="comment-${r.id}" placeholder="ex: RDV 10 min avant, départ ponctuel..."></textarea>
+      <button class="btn-primary btn-small" onclick="proposeRide('${r.id}')">Je prends en charge ce trajet</button>
+    </div>
+  `).join("");
+}
+
+async function proposeRide(rideId) {
+  const comment = document.getElementById(`comment-${rideId}`).value.trim();
+  const { error } = await sb.rpc("propose_ride", { p_driver_id: guest.id, p_ride_id: rideId, p_comment: comment || null });
+  if (!error) {
+    await refreshAvailableRides();
+    await refreshMyDrivenRides();
+  }
+}
+
+async function refreshMyDrivenRides() {
+  const listEl = document.getElementById("myDrivenRidesList");
+  const { data, error } = await sb.rpc("list_my_driven_rides", { p_driver_id: guest.id });
+  if (error) {
+    listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`;
+    return;
+  }
+  if (!data || data.length === 0) {
+    listEl.innerHTML = `<p class="info">Vous n'avez pas encore pris de trajet en charge.</p>`;
+    return;
+  }
+  listEl.innerHTML = data.map(r => `
+    <div class="ride-item">
+      <div class="top-actions">
+        ${statusBadge(r.status)}
+        <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+      </div>
+      <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
+      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}
+        ${r.requester_phone ? ` · 📞 ${escapeHtml(r.requester_phone)}` : ""}
+        · ${r.nb_persons} pers. ${r.has_luggage ? "· avec bagages" : ""}</div>
+      <label for="edit-comment-${r.id}" style="margin-top:8px;">Commentaire / conditions</label>
+      <textarea id="edit-comment-${r.id}">${escapeHtml(r.driver_comment || "")}</textarea>
+      <button class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour le commentaire</button>
+      <button class="btn-danger btn-small" onclick="cancelProposal('${r.id}')">Annuler ma prise en charge</button>
+    </div>
+  `).join("");
+}
+
+async function updateComment(rideId) {
+  const comment = document.getElementById(`edit-comment-${rideId}`).value.trim();
+  const { error } = await sb.rpc("update_driver_comment", { p_driver_id: guest.id, p_ride_id: rideId, p_comment: comment || null });
+  if (!error) await refreshMyDrivenRides();
+}
+
+async function cancelProposal(rideId) {
+  if (!confirm("Annuler votre prise en charge de ce trajet ? Il redeviendra disponible pour les autres chauffeurs.")) return;
+  const { error } = await sb.rpc("cancel_driver_proposal", { p_driver_id: guest.id, p_ride_id: rideId });
+  if (!error) {
+    await refreshAvailableRides();
+    await refreshMyDrivenRides();
+  }
+}
+
+render();
+</script>
+</body>
+</html>
