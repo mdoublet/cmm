@@ -115,7 +115,7 @@ begin
   update guests set pin_hash = crypt(p_code, gen_salt('bf')) where id = v_id;
 
   return query
-    select id, first_name, last_name, has_vehicle from guests where id = v_id;
+    select g.id, g.first_name, g.last_name, g.has_vehicle from guests g where g.id = v_id;
 end;
 $$;
 
@@ -143,7 +143,7 @@ begin
   end if;
 
   return query
-    select id, first_name, last_name, has_vehicle from guests where id = v_id;
+    select g.id, g.first_name, g.last_name, g.has_vehicle from guests g where g.id = v_id;
 end;
 $$;
 
