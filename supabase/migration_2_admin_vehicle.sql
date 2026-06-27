@@ -11,7 +11,13 @@ alter table guests add column if not exists is_admin boolean not null default fa
 -- ----------------------------------------------------------------------------
 -- get_guest_status / set_guest_code / verify_guest_code : on renvoie aussi
 -- is_admin pour que l'appli sache quel onglet afficher.
+-- Le type de retour change (nouvelle colonne), il faut donc DROP avant de
+-- recréer ces fonctions.
 -- ----------------------------------------------------------------------------
+drop function if exists get_guest_status(text);
+drop function if exists set_guest_code(text, text);
+drop function if exists verify_guest_code(text, text);
+
 create or replace function get_guest_status(p_identifier text)
 returns table(guest_id uuid, first_name text, last_name text, has_code boolean, has_vehicle boolean, is_admin boolean)
 language sql security definer set search_path = public, extensions as $$
