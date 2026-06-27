@@ -151,11 +151,13 @@
 <nav class="tabbar hidden" id="tabbar">
   <button id="tabRequests" class="active">Mes trajets</button>
   <button id="tabDriver" class="hidden">Chauffeur</button>
+  <button id="tabAdmin" class="hidden">Admin</button>
+  <button id="tabProfile">Profil</button>
   <button id="tabLogout">Déconnexion</button>
 </nav>
 
 <script>
-const APP_VERSION = "v1.1 - 2026-06-26 07:09";
+const APP_VERSION = "v1.2 - 2026-06-27 09:15";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -165,13 +167,16 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const STORAGE_KEY = "covoit_guest";
 let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 let locations = [];
-let currentTab = "requests";
+let currentTab = guest && guest.has_vehicle ? "driver" : "requests";
+let showNewRideForm = false;
 
 const app = document.getElementById("app");
 const headerSub = document.getElementById("headerSub");
 const tabbar = document.getElementById("tabbar");
 const tabRequests = document.getElementById("tabRequests");
 const tabDriver = document.getElementById("tabDriver");
+const tabAdmin = document.getElementById("tabAdmin");
+const tabProfile = document.getElementById("tabProfile");
 const tabLogout = document.getElementById("tabLogout");
 
 function escapeHtml(str) {
@@ -194,8 +199,10 @@ function logout() {
   render();
 }
 
-tabRequests.onclick = () => { currentTab = "requests"; render(); };
+tabRequests.onclick = () => { currentTab = "requests"; showNewRideForm = false; render(); };
 tabDriver.onclick = () => { currentTab = "driver"; render(); };
+tabAdmin.onclick = () => { currentTab = "admin"; render(); };
+tabProfile.onclick = () => { currentTab = "profile"; render(); };
 tabLogout.onclick = logout;
 
 async function loadLocations() {
@@ -224,13 +231,20 @@ async function render() {
   tabbar.classList.remove("hidden");
   headerSub.textContent = `Bonjour ${guest.first_name} !`;
   tabDriver.classList.toggle("hidden", !guest.has_vehicle);
+  tabAdmin.classList.toggle("hidden", !guest.is_admin);
   tabRequests.classList.toggle("active", currentTab === "requests");
   tabDriver.classList.toggle("active", currentTab === "driver");
+  tabAdmin.classList.toggle("active", currentTab === "admin");
+  tabProfile.classList.toggle("active", currentTab === "profile");
 
   await loadLocations();
 
   if (currentTab === "driver" && guest.has_vehicle) {
     await renderDriverTab();
+  } else if (currentTab === "admin" && guest.is_admin) {
+    await renderAdminTab();
+  } else if (currentTab === "profile") {
+    await renderProfileTab();
   } else {
     await renderRequestsTab();
   }
@@ -323,8 +337,8 @@ async function handleSetCode() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle });
-  currentTab = "requests";
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, is_admin: g.is_admin });
+  currentTab = g.has_vehicle ? "driver" : "requests";
   render();
 }
 
@@ -344,8 +358,8 @@ async function handleVerifyCode() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle });
-  currentTab = "requests";
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, is_admin: g.is_admin });
+  currentTab = g.has_vehicle ? "driver" : "requests";
   render();
 }
 
@@ -359,7 +373,16 @@ function statusBadge(status) {
 
 async function renderRequestsTab() {
   app.innerHTML = `
-    <div class="card" id="newRideCard">
+    <div class="card">
+      <div class="top-actions">
+        <h2 style="margin:0;">Mes demandes</h2>
+        <button class="btn-primary btn-small" id="btnToggleNewRide" style="margin:0;">
+          ${showNewRideForm ? "Annuler" : "+ Nouvelle demande"}
+        </button>
+      </div>
+      <div id="myRidesList"><p class="info">Chargement...</p></div>
+    </div>
+    <div class="card ${showNewRideForm ? "" : "hidden"}" id="newRideCard">
       <h2>Nouvelle demande de trajet</h2>
       <form id="newRideForm">
         <div class="row">
@@ -393,11 +416,12 @@ async function renderRequestsTab() {
         <div class="error hidden" id="newRideError"></div>
       </form>
     </div>
-    <div class="card">
-      <h2>Mes demandes</h2>
-      <div id="myRidesList"><p class="info">Chargement...</p></div>
-    </div>
   `;
+
+  document.getElementById("btnToggleNewRide").onclick = () => {
+    showNewRideForm = !showNewRideForm;
+    renderRequestsTab();
+  };
 
   document.getElementById("departureSelect").onchange = (e) => {
     document.getElementById("departureCustom").classList.toggle("hidden", e.target.value !== "__custom__");
@@ -461,10 +485,8 @@ async function handleCreateRide() {
     return;
   }
 
-  document.getElementById("newRideForm").reset();
-  document.getElementById("departureCustom").classList.add("hidden");
-  document.getElementById("arrivalCustom").classList.add("hidden");
-  await refreshMyRides();
+  showNewRideForm = false;
+  await renderRequestsTab();
 }
 
 async function refreshMyRides() {
@@ -623,6 +645,107 @@ async function cancelProposal(rideId) {
     await refreshAvailableRides();
     await refreshMyDrivenRides();
   }
+}
+
+// ---------------------------------------------------------------------------
+// PROFIL
+// ---------------------------------------------------------------------------
+async function renderProfileTab() {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Mon profil</h2>
+      <p class="info">${escapeHtml(guest.first_name)} ${escapeHtml(guest.last_name)}</p>
+      <div class="checkbox-row">
+        <input id="hasVehicleToggle" type="checkbox" ${guest.has_vehicle ? "checked" : ""} />
+        <label for="hasVehicleToggle" style="margin:0;">J'ai un véhicule et je peux conduire d'autres invités</label>
+      </div>
+      <button class="btn-primary" id="btnSaveProfile">Enregistrer</button>
+      <div class="error hidden" id="profileError"></div>
+      <div class="info hidden" id="profileSuccess">Profil mis à jour.</div>
+    </div>
+  `;
+  document.getElementById("btnSaveProfile").onclick = async () => {
+    const hasVehicle = document.getElementById("hasVehicleToggle").checked;
+    const errEl = document.getElementById("profileError");
+    const okEl = document.getElementById("profileSuccess");
+    errEl.classList.add("hidden");
+    okEl.classList.add("hidden");
+    const { error } = await sb.rpc("update_has_vehicle", { p_guest_id: guest.id, p_has_vehicle: hasVehicle });
+    if (error) {
+      errEl.textContent = "Erreur lors de la mise à jour.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    guest.has_vehicle = hasVehicle;
+    saveGuest(guest);
+    okEl.classList.remove("hidden");
+    render();
+  };
+}
+
+// ---------------------------------------------------------------------------
+// ADMINISTRATION
+// ---------------------------------------------------------------------------
+async function renderAdminTab() {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Supervision de tous les trajets</h2>
+      <div id="adminRidesList"><p class="info">Chargement...</p></div>
+    </div>
+  `;
+  await refreshAdminRides();
+}
+
+async function refreshAdminRides() {
+  const listEl = document.getElementById("adminRidesList");
+  const { data, error } = await sb.rpc("list_all_rides_admin", { p_admin_id: guest.id });
+  if (error) {
+    listEl.innerHTML = `<p class="error">Erreur de chargement (ou accès non autorisé).</p>`;
+    return;
+  }
+  if (!data || data.length === 0) {
+    listEl.innerHTML = `<p class="info">Aucun trajet enregistré.</p>`;
+    return;
+  }
+  listEl.innerHTML = data.map(r => {
+    let driverInfo = "";
+    if (r.driver_first_name) {
+      driverInfo = `<div class="meta">Chauffeur : ${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}${r.driver_phone ? " · 📞 " + escapeHtml(r.driver_phone) : ""}</div>`;
+    }
+    let actions = "";
+    if (r.status !== "cancelled") {
+      actions += `<button class="btn-secondary btn-small" onclick="adminResetRide('${r.id}')">Remettre en attente</button>`;
+      actions += `<button class="btn-danger btn-small" onclick="adminCancelRide('${r.id}')">Annuler</button>`;
+    }
+    return `
+      <div class="ride-item">
+        <div class="top-actions">
+          ${statusBadge(r.status)}
+          <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+        </div>
+        <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
+        <div class="meta">Demandeur : ${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}
+          ${r.requester_phone ? " · 📞 " + escapeHtml(r.requester_phone) : ""}
+          ${r.requester_email ? " · ✉ " + escapeHtml(r.requester_email) : ""}</div>
+        <div class="meta">${r.nb_persons} pers. ${r.has_luggage ? "· avec bagages" : ""}</div>
+        ${driverInfo}
+        ${r.driver_comment ? `<div class="comment-box">"${escapeHtml(r.driver_comment)}"</div>` : ""}
+        ${actions}
+      </div>
+    `;
+  }).join("");
+}
+
+async function adminCancelRide(rideId) {
+  if (!confirm("Annuler ce trajet ?")) return;
+  const { error } = await sb.rpc("admin_cancel_ride", { p_admin_id: guest.id, p_ride_id: rideId });
+  if (!error) await refreshAdminRides();
+}
+
+async function adminResetRide(rideId) {
+  if (!confirm("Remettre ce trajet en attente (sans chauffeur) ?")) return;
+  const { error } = await sb.rpc("admin_reset_ride", { p_admin_id: guest.id, p_ride_id: rideId });
+  if (!error) await refreshAdminRides();
 }
 
 render();
