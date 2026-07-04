@@ -157,12 +157,13 @@
 <nav class="tabbar hidden" id="tabbar">
   <button id="tabRequests" class="active">Mes trajets</button>
   <button id="tabAdmin" class="hidden">Admin</button>
+  <button id="tabHelp">Aide</button>
   <button id="tabProfile">Mon profil</button>
   <button id="tabLogout">Déconnexion</button>
 </nav>
 
 <script>
-const APP_VERSION = "v1.5 - 2026-07-04 14:00";
+const APP_VERSION = "v1.6 - 2026-07-04 18:00";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -180,6 +181,7 @@ const headerSub = document.getElementById("headerSub");
 const tabbar = document.getElementById("tabbar");
 const tabRequests = document.getElementById("tabRequests");
 const tabAdmin = document.getElementById("tabAdmin");
+const tabHelp = document.getElementById("tabHelp");
 const tabProfile = document.getElementById("tabProfile");
 const tabLogout = document.getElementById("tabLogout");
 
@@ -205,6 +207,7 @@ function logout() {
 
 tabRequests.onclick = () => { currentTab = "requests"; showNewRideForm = false; render(); };
 tabAdmin.onclick = () => { currentTab = "admin"; render(); };
+tabHelp.onclick = () => { currentTab = "help"; render(); };
 tabProfile.onclick = () => { currentTab = "profile"; render(); };
 tabLogout.onclick = logout;
 
@@ -268,12 +271,15 @@ async function render() {
   tabAdmin.classList.toggle("hidden", !guest.is_admin);
   tabRequests.classList.toggle("active", currentTab === "requests");
   tabAdmin.classList.toggle("active", currentTab === "admin");
+  tabHelp.classList.toggle("active", currentTab === "help");
   tabProfile.classList.toggle("active", currentTab === "profile");
 
   await loadLocations();
 
   if (currentTab === "admin" && guest.is_admin) {
     await renderAdminTab();
+  } else if (currentTab === "help") {
+    renderHelpTab();
   } else if (currentTab === "profile") {
     await renderProfileTab();
   } else {
@@ -946,6 +952,31 @@ async function adminResetRide(rideId) {
   if (!confirm("Remettre ce trajet en attente (sans chauffeur) ?")) return;
   const { error } = await sb.rpc("admin_reset_ride", { p_admin_id: guest.id, p_ride_id: rideId });
   if (!error) await refreshAdminRides();
+}
+
+// ---------------------------------------------------------------------------
+// AIDE
+// ---------------------------------------------------------------------------
+function renderHelpTab() {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Carte du mariage</h2>
+      <p class="info">Appuyez sur la carte pour l'agrandir.</p>
+      <a href="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png" target="_blank" rel="noopener">
+        <img src="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png"
+             alt="Carte du mariage"
+             style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;" />
+      </a>
+    </div>
+    <div class="card">
+      <h2>Comment ça marche ?</h2>
+      <ul style="padding-left:18px;font-size:0.9rem;line-height:1.8;">
+        <li><strong>Piétons</strong> — créez une demande de trajet depuis "Mes trajets". Précisez la date, l'heure et les lieux. Vous serez notifié quand un chauffeur propose de vous prendre en charge.</li>
+        <li><strong>Chauffeurs</strong> — consultez les demandes disponibles dans "Mes trajets". Proposez votre aide et ajoutez un commentaire si besoin (heure de rendez-vous, point de départ exact…). Une fois le passager confirmé, ses coordonnées vous seront visibles.</li>
+        <li><strong>Lieux</strong> — si votre lieu n'est pas dans la liste, ajoutez-le. Précisez les détails du point de rendez-vous par téléphone ou dans les commentaires du trajet.</li>
+      </ul>
+    </div>
+  `;
 }
 
 render();
