@@ -209,7 +209,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v1.8 - 2026-07-04 19:00";
+const APP_VERSION = "v1.9 - 2026-07-04 19:30";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -1060,6 +1060,7 @@ async function refreshAdminUsers() {
         </div>
       </div>`;
   }).join("");
+  // note: colonnes retournées par list_all_guests_admin v2 : guest_id, first_name, last_name…
 }
 
 // --- Sous-onglet Lieux ---
@@ -1068,17 +1069,17 @@ async function refreshAdminLocations() {
   const { data, error } = await sb.rpc("list_all_locations_admin", { p_admin_id: guest.id });
   if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
 
-  const official = (data || []).filter(l => l.sort_order < 99);
-  const custom   = (data || []).filter(l => l.sort_order >= 99);
+  const official = (data || []).filter(l => l.loc_sort_order < 99);
+  const custom   = (data || []).filter(l => l.loc_sort_order >= 99);
 
   const locRow = (l) => {
-    const isOff = l.sort_order < 99;
+    const isOff = l.loc_sort_order < 99;
     return `
-      <div class="loc-item" id="locrow-${l.id}">
-        <span class="loc-name ${isOff ? "loc-official" : "loc-custom"}">${escapeHtml(l.name)}</span>
-        ${!isOff ? `<button class="btn-secondary btn-small" onclick="adminPromoteLocation('${l.id}')">Officialiser</button>` : ""}
-        <button class="btn-secondary btn-small" onclick="adminRenameLocationPrompt('${l.id}','${escapeHtml(l.name).replace(/'/g,"\\'")}')">Renommer</button>
-        <button class="btn-danger btn-small" onclick="adminDeleteLocation('${l.id}')">✕</button>
+      <div class="loc-item" id="locrow-${l.loc_id}">
+        <span class="loc-name ${isOff ? "loc-official" : "loc-custom"}">${escapeHtml(l.loc_name)}</span>
+        ${!isOff ? `<button class="btn-secondary btn-small" onclick="adminPromoteLocation('${l.loc_id}')">Officialiser</button>` : ""}
+        <button class="btn-secondary btn-small" onclick="adminRenameLocationPrompt('${l.loc_id}','${escapeHtml(l.loc_name).replace(/'/g,"\\'")}')">Renommer</button>
+        <button class="btn-danger btn-small" onclick="adminDeleteLocation('${l.loc_id}')">✕</button>
       </div>`;
   };
 
