@@ -163,7 +163,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v1.6 - 2026-07-04 18:00";
+const APP_VERSION = "v1.7 - 2026-07-04 18:30";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -213,15 +213,28 @@ tabLogout.onclick = logout;
 
 async function loadLocations() {
   if (locations.length) return locations;
-  const { data, error } = await sb.from("locations").select("id,name").order("sort_order");
+  const { data, error } = await sb.from("locations").select("id,name,sort_order").order("sort_order");
   if (!error) locations = data || [];
   return locations;
 }
 
 function locationOptions(selectedId) {
+  const official = locations.filter(l => (l.sort_order ?? 99) < 99);
+  const custom   = locations.filter(l => (l.sort_order ?? 99) >= 99);
   let html = `<option value="">-- choisir --</option>`;
-  for (const l of locations) {
-    html += `<option value="${l.id}" ${l.id === selectedId ? "selected" : ""}>${escapeHtml(l.name)}</option>`;
+  if (official.length) {
+    html += `<optgroup label="Lieux officiels">`;
+    for (const l of official) {
+      html += `<option value="${l.id}" ${l.id === selectedId ? "selected" : ""} style="font-weight:bold">${escapeHtml(l.name)}</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  if (custom.length) {
+    html += `<optgroup label="Lieux ajoutés">`;
+    for (const l of custom) {
+      html += `<option value="${l.id}" ${l.id === selectedId ? "selected" : ""} style="font-style:italic">${escapeHtml(l.name)}</option>`;
+    }
+    html += `</optgroup>`;
   }
   html += `<option value="__add__">+ Ajouter un nouveau lieu…</option>`;
   return html;
@@ -240,7 +253,7 @@ function wireLocationSelect(selectId, addRowId, addInputId, addBtnId) {
     const loc = data[0];
     // Ajouter à la liste locale si absent
     if (!locations.find(l => l.id === loc.id)) {
-      locations.push({ id: loc.id, name: loc.name });
+      locations.push({ id: loc.id, name: loc.name, sort_order: 99 });
     }
     // Reconstruire les options et sélectionner le nouveau lieu
     sel.innerHTML = locationOptions(loc.id);
