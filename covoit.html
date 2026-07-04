@@ -157,7 +157,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v1.2 - 2026-06-27 09:15";
+const APP_VERSION = "v1.3 - 2026-07-04 09:00";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -258,8 +258,8 @@ function renderLogin() {
     <div class="card">
       <h2>Connexion</h2>
       <div id="loginStep1">
-        <label for="identifier">Email ou numéro de téléphone</label>
-        <input id="identifier" type="text" placeholder="ex: marie.dupont@email.com" autocomplete="username" />
+        <label for="identifier">Adresse email</label>
+        <input id="identifier" type="email" inputmode="email" placeholder="ex: marie.dupont@email.com" autocomplete="username" />
         <button class="btn-primary" id="btnContinue">Continuer</button>
         <div class="error hidden" id="loginError1"></div>
       </div>
@@ -281,43 +281,137 @@ async function handleIdentifierSubmit() {
   if (!identifier) return;
 
   const { data, error } = await sb.rpc("get_guest_status", { p_identifier: identifier });
-  if (error || !data || data.length === 0) {
-    errEl.textContent = "Aucun invité trouvé avec cet email/téléphone. Vérifiez la saisie.";
-    errEl.classList.remove("hidden");
+  const step2 = document.getElementById("loginStep2");
+
+  if (!data || data.length === 0) {
+    // Inconnu → proposer la création de compte
+    document.getElementById("loginStep1").classList.add("hidden");
+    step2.classList.remove("hidden");
+    step2.innerHTML = `
+      <p class="info">Aucun compte trouvé pour cet email. Voulez-vous créer votre profil ?</p>
+      <button class="btn-primary" id="btnGoRegister">Créer mon profil</button>
+      <button class="btn-secondary" id="btnBackToEmail" style="margin-top:8px;">← Corriger l'email</button>
+    `;
+    document.getElementById("btnGoRegister").onclick = () => renderRegister(identifier);
+    document.getElementById("btnBackToEmail").onclick = renderLogin;
     return;
   }
+
   pendingIdentifier = identifier;
   const info = data[0];
   document.getElementById("loginStep1").classList.add("hidden");
-  const step2 = document.getElementById("loginStep2");
   step2.classList.remove("hidden");
 
   if (!info.has_code) {
+    // Compte existant (pré-chargé par admin) sans code encore défini
     step2.innerHTML = `
-      <p>Bonjour ${escapeHtml(info.first_name)} ! Première connexion : définissez votre code à 6 chiffres.</p>
+      <p>Bonjour <strong>${escapeHtml(info.first_name)}</strong> ! Première connexion : définissez votre code à 6 chiffres.</p>
+      <label>Code (6 chiffres)</label>
       <input id="pinCode" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
-      <input id="pinCodeConfirm" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="confirmer" />
+      <label>Confirmer le code</label>
+      <input id="pinCodeConfirm" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
       <button class="btn-primary" id="btnSetCode">Définir mon code</button>
       <div class="error hidden" id="loginError2"></div>
     `;
     document.getElementById("btnSetCode").onclick = handleSetCode;
   } else {
     step2.innerHTML = `
-      <p>Bonjour ${escapeHtml(info.first_name)} ! Entrez votre code à 6 chiffres.</p>
+      <p>Bonjour <strong>${escapeHtml(info.first_name)}</strong> ! Entrez votre code à 6 chiffres.</p>
       <input id="pinCode" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
       <button class="btn-primary" id="btnVerifyCode">Valider</button>
+      <button class="btn-secondary" id="btnBackLogin" style="margin-top:8px;">← Retour</button>
       <div class="error hidden" id="loginError2"></div>
     `;
     document.getElementById("btnVerifyCode").onclick = handleVerifyCode;
+    document.getElementById("btnBackLogin").onclick = renderLogin;
     document.getElementById("pinCode").addEventListener("keydown", e => {
       if (e.key === "Enter") handleVerifyCode();
     });
   }
 }
 
+// ---------------------------------------------------------------------------
+// INSCRIPTION (nouveau compte)
+// ---------------------------------------------------------------------------
+function renderRegister(prefillEmail = "") {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Créer mon profil</h2>
+      <label for="regFirstName">Prénom *</label>
+      <input id="regFirstName" type="text" autocomplete="given-name" placeholder="Marie" />
+
+      <label for="regLastName">Nom *</label>
+      <input id="regLastName" type="text" autocomplete="family-name" placeholder="Dupont" />
+
+      <label for="regEmail">Email * (utilisé pour la connexion)</label>
+      <input id="regEmail" type="email" inputmode="email" autocomplete="email" value="${escapeHtml(prefillEmail)}" />
+
+      <label for="regPhone">Téléphone</label>
+      <input id="regPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+33 6 12 34 56 78" />
+
+      <div class="checkbox-row" style="margin-top:14px;">
+        <input id="regHasVehicle" type="checkbox" />
+        <label for="regHasVehicle" style="margin:0;">J'ai un véhicule et je peux conduire d'autres invités</label>
+      </div>
+
+      <hr style="margin:16px 0; border:none; border-top:1px solid var(--border);" />
+      <p style="font-size:0.85rem;color:var(--muted);margin:0 0 8px;">Définissez un code secret à 6 chiffres pour vous connecter.</p>
+
+      <label for="regPin">Code à 6 chiffres *</label>
+      <input id="regPin" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
+      <label for="regPinConfirm">Confirmer le code *</label>
+      <input id="regPinConfirm" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
+
+      <button class="btn-primary" id="btnRegister" style="margin-top:16px;">Créer mon compte</button>
+      <button class="btn-secondary" id="btnBackFromRegister" style="margin-top:8px;">← Retour</button>
+      <div class="error hidden" id="regError"></div>
+    </div>
+  `;
+  document.getElementById("btnRegister").onclick = handleRegister;
+  document.getElementById("btnBackFromRegister").onclick = renderLogin;
+}
+
+async function handleRegister() {
+  const firstName = document.getElementById("regFirstName").value.trim();
+  const lastName  = document.getElementById("regLastName").value.trim();
+  const email     = document.getElementById("regEmail").value.trim();
+  const phone     = document.getElementById("regPhone").value.trim();
+  const hasVehicle = document.getElementById("regHasVehicle").checked;
+  const pin       = document.getElementById("regPin").value.trim();
+  const pinConfirm = document.getElementById("regPinConfirm").value.trim();
+  const errEl = document.getElementById("regError");
+  errEl.classList.add("hidden");
+
+  if (!firstName) { errEl.textContent = "Le prénom est requis."; errEl.classList.remove("hidden"); return; }
+  if (!lastName)  { errEl.textContent = "Le nom est requis."; errEl.classList.remove("hidden"); return; }
+  if (!email)     { errEl.textContent = "L'email est requis."; errEl.classList.remove("hidden"); return; }
+  if (!/^[0-9]{6}$/.test(pin)) { errEl.textContent = "Le code doit comporter exactement 6 chiffres."; errEl.classList.remove("hidden"); return; }
+  if (pin !== pinConfirm) { errEl.textContent = "Les deux codes ne correspondent pas."; errEl.classList.remove("hidden"); return; }
+
+  const { data, error } = await sb.rpc("register_guest", {
+    p_email: email, p_first_name: firstName, p_last_name: lastName,
+    p_phone: phone || null, p_has_vehicle: hasVehicle, p_code: pin
+  });
+
+  if (error || !data || data.length === 0) {
+    const msg = error?.message || "";
+    if (msg.includes("email_already_used")) {
+      errEl.textContent = "Cet email est déjà associé à un compte. Connectez-vous avec votre code.";
+    } else {
+      errEl.textContent = "Erreur lors de la création du compte. Vérifiez les informations.";
+    }
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const g = data[0];
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, is_admin: g.is_admin });
+  currentTab = g.has_vehicle ? "driver" : "requests";
+  render();
+}
+
 async function handleSetCode() {
   const code = document.getElementById("pinCode").value.trim();
-  const confirm = document.getElementById("pinCodeConfirm").value.trim();
+  const confirmCode = document.getElementById("pinCodeConfirm").value.trim();
   const errEl = document.getElementById("loginError2");
   errEl.classList.add("hidden");
   if (!/^[0-9]{6}$/.test(code)) {
@@ -325,7 +419,7 @@ async function handleSetCode() {
     errEl.classList.remove("hidden");
     return;
   }
-  if (code !== confirm) {
+  if (code !== confirmCode) {
     errEl.textContent = "Les deux codes ne correspondent pas.";
     errEl.classList.remove("hidden");
     return;
@@ -651,35 +745,120 @@ async function cancelProposal(rideId) {
 // PROFIL
 // ---------------------------------------------------------------------------
 async function renderProfileTab() {
+  // Charger les infos à jour depuis la base
+  const { data: profileData } = await sb.rpc("get_guest_profile", { p_guest_id: guest.id });
+  const p = profileData && profileData.length ? profileData[0] : {};
+
   app.innerHTML = `
     <div class="card">
-      <h2>Mon profil</h2>
-      <p class="info">${escapeHtml(guest.first_name)} ${escapeHtml(guest.last_name)}</p>
-      <div class="checkbox-row">
-        <input id="hasVehicleToggle" type="checkbox" ${guest.has_vehicle ? "checked" : ""} />
-        <label for="hasVehicleToggle" style="margin:0;">J'ai un véhicule et je peux conduire d'autres invités</label>
+      <h2>Mes informations</h2>
+      <label for="profFirstName">Prénom</label>
+      <input id="profFirstName" type="text" value="${escapeHtml(p.first_name || guest.first_name)}" />
+
+      <label for="profLastName">Nom</label>
+      <input id="profLastName" type="text" value="${escapeHtml(p.last_name || guest.last_name)}" />
+
+      <label for="profEmail">Email (identifiant de connexion)</label>
+      <input id="profEmail" type="email" inputmode="email" value="${escapeHtml(p.email || "")}" />
+
+      <label for="profPhone">Téléphone</label>
+      <input id="profPhone" type="tel" inputmode="tel" value="${escapeHtml(p.phone || "")}" />
+
+      <div class="checkbox-row" style="margin-top:14px;">
+        <input id="profHasVehicle" type="checkbox" ${(p.has_vehicle ?? guest.has_vehicle) ? "checked" : ""} />
+        <label for="profHasVehicle" style="margin:0;">J'ai un véhicule et je peux conduire d'autres invités</label>
       </div>
-      <button class="btn-primary" id="btnSaveProfile">Enregistrer</button>
+
+      <button class="btn-primary" id="btnSaveProfile" style="margin-top:16px;">Enregistrer les modifications</button>
       <div class="error hidden" id="profileError"></div>
-      <div class="info hidden" id="profileSuccess">Profil mis à jour.</div>
+      <div class="info hidden" id="profileSuccess"></div>
+    </div>
+
+    <div class="card">
+      <h2>Changer mon code de connexion</h2>
+      <label for="oldPin">Code actuel</label>
+      <input id="oldPin" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
+      <label for="newPin">Nouveau code (6 chiffres)</label>
+      <input id="newPin" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
+      <label for="newPinConfirm">Confirmer le nouveau code</label>
+      <input id="newPinConfirm" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
+      <button class="btn-primary" id="btnChangePin" style="margin-top:16px;">Changer mon code</button>
+      <div class="error hidden" id="pinError"></div>
+      <div class="info hidden" id="pinSuccess"></div>
     </div>
   `;
+
   document.getElementById("btnSaveProfile").onclick = async () => {
-    const hasVehicle = document.getElementById("hasVehicleToggle").checked;
+    const firstName  = document.getElementById("profFirstName").value.trim();
+    const lastName   = document.getElementById("profLastName").value.trim();
+    const email      = document.getElementById("profEmail").value.trim();
+    const phone      = document.getElementById("profPhone").value.trim();
+    const hasVehicle = document.getElementById("profHasVehicle").checked;
     const errEl = document.getElementById("profileError");
-    const okEl = document.getElementById("profileSuccess");
+    const okEl  = document.getElementById("profileSuccess");
     errEl.classList.add("hidden");
     okEl.classList.add("hidden");
-    const { error } = await sb.rpc("update_has_vehicle", { p_guest_id: guest.id, p_has_vehicle: hasVehicle });
-    if (error) {
-      errEl.textContent = "Erreur lors de la mise à jour.";
+
+    if (!firstName || !lastName || !email) {
+      errEl.textContent = "Prénom, nom et email sont obligatoires.";
       errEl.classList.remove("hidden");
       return;
     }
-    guest.has_vehicle = hasVehicle;
+
+    const { data, error } = await sb.rpc("update_guest_profile", {
+      p_guest_id: guest.id, p_first_name: firstName, p_last_name: lastName,
+      p_email: email, p_phone: phone || null, p_has_vehicle: hasVehicle
+    });
+
+    if (error) {
+      const msg = error.message || "";
+      errEl.textContent = msg.includes("email_already_used")
+        ? "Cet email est déjà utilisé par un autre compte."
+        : "Erreur lors de la mise à jour.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    const updated = data && data.length ? data[0] : {};
+    guest.first_name = updated.first_name || firstName;
+    guest.last_name  = updated.last_name  || lastName;
+    guest.has_vehicle = updated.has_vehicle ?? hasVehicle;
     saveGuest(guest);
+    okEl.textContent = "Informations mises à jour.";
     okEl.classList.remove("hidden");
-    render();
+    headerSub.textContent = `Bonjour ${guest.first_name} !`;
+    tabDriver.classList.toggle("hidden", !guest.has_vehicle);
+  };
+
+  document.getElementById("btnChangePin").onclick = async () => {
+    const oldPin    = document.getElementById("oldPin").value.trim();
+    const newPin    = document.getElementById("newPin").value.trim();
+    const newPinC   = document.getElementById("newPinConfirm").value.trim();
+    const errEl = document.getElementById("pinError");
+    const okEl  = document.getElementById("pinSuccess");
+    errEl.classList.add("hidden");
+    okEl.classList.add("hidden");
+
+    if (!/^[0-9]{6}$/.test(oldPin)) { errEl.textContent = "Le code actuel doit comporter 6 chiffres."; errEl.classList.remove("hidden"); return; }
+    if (!/^[0-9]{6}$/.test(newPin)) { errEl.textContent = "Le nouveau code doit comporter 6 chiffres."; errEl.classList.remove("hidden"); return; }
+    if (newPin !== newPinC) { errEl.textContent = "Les deux nouveaux codes ne correspondent pas."; errEl.classList.remove("hidden"); return; }
+
+    const { error } = await sb.rpc("change_guest_pin", {
+      p_guest_id: guest.id, p_old_code: oldPin, p_new_code: newPin
+    });
+
+    if (error) {
+      const msg = error.message || "";
+      errEl.textContent = msg.includes("invalid_old_code")
+        ? "Code actuel incorrect."
+        : "Erreur lors du changement de code.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    okEl.textContent = "Code de connexion mis à jour.";
+    okEl.classList.remove("hidden");
+    document.getElementById("oldPin").value = "";
+    document.getElementById("newPin").value = "";
+    document.getElementById("newPinConfirm").value = "";
   };
 }
 
