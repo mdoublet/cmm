@@ -4,147 +4,164 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Covoiturage Mariage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --primary: #b8860b;
-    --primary-dark: #8a6508;
-    --bg: #faf7f2;
-    --card: #ffffff;
-    --text: #2b2b2b;
-    --muted: #777;
-    --border: #e3ddd2;
-    --pending: #e0a800;
-    --proposed: #0d6efd;
-    --confirmed: #198754;
-    --cancelled: #aaa;
+    --primary:      #1E6A7A;
+    --primary-dark: #134D5A;
+    --primary-light:#C8DFE5;
+    --bg:           #EEF4F7;
+    --card:         #F5F9FB;
+    --text:         #0D2B33;
+    --muted:        #5A7D87;
+    --border:       #B8D0D8;
+    --border-strong:#7AAAB8;
+    --pending:      #B8620A;
+    --proposed:     #1E6A7A;
+    --confirmed:    #1E7A45;
+    --cancelled:    #9aacb1;
+    --danger:       #A32020;
+    --danger-bg:    #FCEAEA;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg);
     color: var(--text);
     padding-bottom: 70px;
+    max-width: 480px;
+    margin: 0 auto;
   }
   header {
-    background: var(--primary);
+    background: var(--primary-dark);
     color: #fff;
-    padding: 16px;
+    padding: 14px 16px;
     text-align: center;
     position: sticky;
     top: 0;
     z-index: 10;
   }
-  header h1 { margin: 0; font-size: 1.2rem; }
-  header .sub { font-size: 0.8rem; opacity: 0.9; }
-  header .version { font-size: 0.7rem; opacity: 0.7; margin-top: 4px; }
-  main { max-width: 480px; margin: 0 auto; padding: 16px; }
+  header h1 { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 600; }
+  header .sub { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+  header .version { font-size: 0.65rem; opacity: 0.5; margin-top: 3px; }
+  main { padding: 16px; }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 4px rgba(13,43,51,0.07);
   }
-  .card h2 { margin: 0 0 12px; font-size: 1rem; color: var(--primary-dark); }
-  label { display: block; font-size: 0.85rem; margin: 10px 0 4px; color: var(--muted); }
+  .card h2 { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--primary-dark); margin-bottom: 12px; }
+  label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--muted); letter-spacing: 0.3px; margin: 10px 0 4px; }
   input, select, textarea {
     width: 100%;
-    padding: 10px;
-    border: 1px solid var(--border);
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
     border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
     font-size: 1rem;
     background: #fff;
     color: var(--text);
+    -webkit-appearance: none;
   }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
   textarea { resize: vertical; min-height: 60px; }
-  .pin-input {
-    text-align: center;
-    font-size: 1.6rem;
-    letter-spacing: 0.4em;
-  }
+  .pin-input { text-align: center; font-size: 1.6rem; letter-spacing: 0.4em; }
   button {
     cursor: pointer;
-    border: none;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 1rem;
-    font-weight: 600;
+    border: 1px solid var(--border-strong);
+    border-radius: 24px;
+    padding: 11px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
     width: 100%;
     margin-top: 12px;
+    background: transparent;
+    color: var(--text);
+    transition: background 0.12s, transform 0.1s;
   }
-  .btn-primary { background: var(--primary); color: #fff; }
+  button:active { transform: scale(0.97); }
+  .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary-dark); }
   .btn-primary:active { background: var(--primary-dark); }
-  .btn-secondary { background: #eee; color: var(--text); }
-  .btn-danger { background: #dc3545; color: #fff; }
-  .btn-small { width: auto; padding: 8px 12px; font-size: 0.85rem; margin: 4px 4px 0 0; display: inline-block; }
+  .btn-secondary { background: var(--primary-light); color: var(--primary-dark); border-color: var(--border-strong); }
+  .btn-danger { background: var(--danger); color: #fff; border-color: #7a1515; }
+  .btn-small { width: auto; padding: 6px 14px; font-size: 0.82rem; margin: 4px 4px 0 0; display: inline-block; border-radius: 20px; }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; }
-  .error { color: #c0392b; font-size: 0.85rem; margin-top: 8px; }
-  .info { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+  .error { color: var(--danger); font-size: 0.82rem; margin-top: 8px; }
+  .info { color: var(--muted); font-size: 0.82rem; margin-top: 8px; }
   .hidden { display: none !important; }
   .tabbar {
     position: fixed;
     bottom: 0; left: 0; right: 0;
     display: flex;
-    background: #fff;
-    border-top: 1px solid var(--border);
+    background: var(--primary-dark);
+    border-top: 1px solid var(--primary);
     z-index: 10;
   }
   .tabbar button {
     flex: 1;
     margin: 0;
     border-radius: 0;
+    border: none;
     background: none;
-    color: var(--muted);
+    color: rgba(255,255,255,0.55);
     padding: 10px 4px;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 500;
   }
-  .tabbar button.active { color: var(--primary); font-weight: 700; }
+  .tabbar button.active { color: #fff; font-weight: 700; }
   .ride-item {
+    background: #fff;
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 12px;
     margin-bottom: 10px;
   }
-  .ride-item .meta { font-size: 0.8rem; color: var(--muted); }
-  .ride-item .route { font-weight: 600; margin: 4px 0; }
+  .ride-item .meta { font-size: 0.78rem; color: var(--muted); }
+  .ride-item .route { font-weight: 600; margin: 4px 0; color: var(--primary-dark); }
   .badge {
     display: inline-block;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 12px;
+    padding: 2px 10px;
+    border-radius: 20px;
     color: #fff;
     text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
-  .badge-pending { background: var(--pending); }
+  .badge-pending  { background: var(--pending); }
   .badge-proposed { background: var(--proposed); }
-  .badge-confirmed { background: var(--confirmed); }
-  .badge-cancelled { background: var(--cancelled); }
+  .badge-confirmed{ background: var(--confirmed); }
+  .badge-cancelled{ background: var(--cancelled); }
   .comment-box {
-    background: #f3f0ea;
-    border-radius: 8px;
-    padding: 8px;
-    font-size: 0.85rem;
+    background: var(--bg);
+    border-left: 3px solid var(--primary-light);
+    border-radius: 0 8px 8px 0;
+    padding: 8px 10px;
+    font-size: 0.83rem;
+    color: var(--muted);
     margin-top: 6px;
   }
   .top-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .top-actions span { font-size: 0.9rem; }
-  .top-actions a { font-size: 0.8rem; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
+  .top-actions span { font-size: 0.88rem; }
+  .top-actions a { font-size: 0.78rem; color: var(--primary); text-decoration: underline; cursor: pointer; }
   .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .checkbox-row input { width: auto; }
-  .cap-over  { color: #991b1b; font-size: 0.8rem; font-weight: 600; }
+  .cap-over  { color: var(--danger); font-size: 0.78rem; font-weight: 600; }
   .add-location-row { margin-top: 6px; }
-  .add-location-row .info { font-size: 0.78rem; color: var(--muted); font-style: italic; }
+  .add-location-row .info { font-size: 0.76rem; color: var(--muted); font-style: italic; }
   .seats-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
   .seats-row label { margin: 0; white-space: nowrap; }
   .seats-row input { width: 70px; }
   .subtabbar {
     display: flex;
-    gap: 0;
     border-bottom: 2px solid var(--border);
     margin-bottom: 14px;
   }
@@ -152,10 +169,11 @@
     flex: 1;
     margin: 0;
     border-radius: 0;
+    border: none;
     background: none;
     color: var(--muted);
     padding: 9px 4px;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     border-bottom: 3px solid transparent;
     margin-bottom: -2px;
@@ -163,6 +181,7 @@
   }
   .subtabbar button.active { color: var(--primary); border-bottom-color: var(--primary); }
   .user-item {
+    background: #fff;
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 10px 12px;
@@ -173,9 +192,9 @@
     gap: 8px;
   }
   .user-item .user-info { flex: 1; min-width: 0; }
-  .user-item .user-name { font-weight: 600; font-size: 0.95rem; }
-  .user-item .user-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
-  .user-item .user-stats { font-size: 0.8rem; text-align: right; white-space: nowrap; }
+  .user-item .user-name { font-weight: 600; font-size: 0.93rem; color: var(--primary-dark); }
+  .user-item .user-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+  .user-item .user-stats { font-size: 0.78rem; text-align: right; white-space: nowrap; color: var(--muted); }
   .loc-item {
     display: flex;
     align-items: center;
@@ -184,10 +203,19 @@
     border-bottom: 1px solid var(--border);
   }
   .loc-item:last-child { border-bottom: none; }
-  .loc-item .loc-name { flex: 1; font-size: 0.95rem; }
-  .loc-official { font-weight: bold; }
+  .loc-item .loc-name { flex: 1; font-size: 0.93rem; }
+  .loc-official { font-weight: 600; color: var(--primary-dark); }
   .loc-custom { font-style: italic; color: var(--muted); }
-  .badge-admin { background: #7c3aed; }
+  .badge-admin { background: #5b21b6; }
+  .section-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 12px 0 6px;
+  }
+  .section-title:first-child { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -209,7 +237,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v1.9 - 2026-07-04 19:30";
+const APP_VERSION = "v2.0 - 2026-07-04 20:00";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -266,8 +294,9 @@ async function loadLocations() {
 }
 
 function locationOptions(selectedId) {
-  const official = locations.filter(l => (l.sort_order ?? 99) < 99);
-  const custom   = locations.filter(l => (l.sort_order ?? 99) >= 99);
+  const alpha = (a, b) => a.name.localeCompare(b.name, 'fr', {sensitivity:'base'});
+  const official = locations.filter(l => (l.sort_order ?? 99) < 99).sort(alpha);
+  const custom   = locations.filter(l => (l.sort_order ?? 99) >= 99).sort(alpha);
   let html = `<option value="">-- choisir --</option>`;
   if (official.length) {
     html += `<optgroup label="Lieux officiels">`;
@@ -1069,8 +1098,9 @@ async function refreshAdminLocations() {
   const { data, error } = await sb.rpc("list_all_locations_admin", { p_admin_id: guest.id });
   if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
 
-  const official = (data || []).filter(l => l.loc_sort_order < 99);
-  const custom   = (data || []).filter(l => l.loc_sort_order >= 99);
+  const alphaLoc = (a, b) => a.loc_name.localeCompare(b.loc_name, 'fr', {sensitivity:'base'});
+  const official = (data || []).filter(l => l.loc_sort_order < 99).sort(alphaLoc);
+  const custom   = (data || []).filter(l => l.loc_sort_order >= 99).sort(alphaLoc);
 
   const locRow = (l) => {
     const isOff = l.loc_sort_order < 99;
@@ -1084,9 +1114,9 @@ async function refreshAdminLocations() {
   };
 
   el.innerHTML = `
-    <h3 style="font-size:0.9rem;color:var(--primary-dark);margin:0 0 8px">Lieux officiels</h3>
+    <div class="section-title">Lieux officiels</div>
     ${official.length ? official.map(locRow).join("") : `<p class="info">Aucun lieu officiel.</p>`}
-    <h3 style="font-size:0.9rem;color:var(--primary-dark);margin:12px 0 8px">Lieux ajoutés par les utilisateurs</h3>
+    <div class="section-title">Lieux ajoutés par les utilisateurs</div>
     ${custom.length ? custom.map(locRow).join("") : `<p class="info">Aucun lieu ajouté.</p>`}
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
       <label>Ajouter un lieu officiel</label>
