@@ -142,6 +142,52 @@
   .seats-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
   .seats-row label { margin: 0; white-space: nowrap; }
   .seats-row input { width: 70px; }
+  .subtabbar {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .subtabbar button {
+    flex: 1;
+    margin: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--muted);
+    padding: 9px 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    width: auto;
+  }
+  .subtabbar button.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .user-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .user-item .user-info { flex: 1; min-width: 0; }
+  .user-item .user-name { font-weight: 600; font-size: 0.95rem; }
+  .user-item .user-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+  .user-item .user-stats { font-size: 0.8rem; text-align: right; white-space: nowrap; }
+  .loc-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .loc-item:last-child { border-bottom: none; }
+  .loc-item .loc-name { flex: 1; font-size: 0.95rem; }
+  .loc-official { font-weight: bold; }
+  .loc-custom { font-style: italic; color: var(--muted); }
+  .badge-admin { background: #7c3aed; }
 </style>
 </head>
 <body>
@@ -163,7 +209,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v1.7 - 2026-07-04 18:30";
+const APP_VERSION = "v1.8 - 2026-07-04 19:00";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -173,6 +219,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const STORAGE_KEY = "covoit_guest";
 let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 let locations = [];
+let adminSubTab = "rides"; // "rides" | "users" | "locations"
 let currentTab = "requests";
 let showNewRideForm = false;
 
@@ -905,37 +952,57 @@ async function renderProfileTab() {
 // ---------------------------------------------------------------------------
 // ADMINISTRATION
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// ADMIN — structure avec 3 sous-onglets
+// ---------------------------------------------------------------------------
 async function renderAdminTab() {
   app.innerHTML = `
     <div class="card">
-      <h2>Supervision de tous les trajets</h2>
-      <div id="adminRidesList"><p class="info">Chargement...</p></div>
+      <div class="subtabbar">
+        <button id="aTabRides"     onclick="setAdminSubTab('rides')">Trajets</button>
+        <button id="aTabUsers"     onclick="setAdminSubTab('users')">Utilisateurs</button>
+        <button id="aTabLocations" onclick="setAdminSubTab('locations')">Lieux</button>
+      </div>
+      <div id="adminContent"><p class="info">Chargement...</p></div>
     </div>
   `;
-  await refreshAdminRides();
+  updateAdminSubTabBtns();
+  await refreshAdminContent();
 }
 
+function updateAdminSubTabBtns() {
+  ["rides","users","locations"].forEach(t => {
+    const btn = document.getElementById("aTab" + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) btn.classList.toggle("active", adminSubTab === t);
+  });
+}
+
+async function setAdminSubTab(tab) {
+  adminSubTab = tab;
+  updateAdminSubTabBtns();
+  await refreshAdminContent();
+}
+
+async function refreshAdminContent() {
+  if (adminSubTab === "rides")     await refreshAdminRides();
+  else if (adminSubTab === "users")     await refreshAdminUsers();
+  else if (adminSubTab === "locations") await refreshAdminLocations();
+}
+
+// --- Sous-onglet Trajets ---
 async function refreshAdminRides() {
-  const listEl = document.getElementById("adminRidesList");
+  const el = document.getElementById("adminContent");
   const { data, error } = await sb.rpc("list_all_rides_admin", { p_admin_id: guest.id });
-  if (error) {
-    listEl.innerHTML = `<p class="error">Erreur de chargement (ou accès non autorisé).</p>`;
-    return;
-  }
-  if (!data || data.length === 0) {
-    listEl.innerHTML = `<p class="info">Aucun trajet enregistré.</p>`;
-    return;
-  }
-  listEl.innerHTML = data.map(r => {
-    let driverInfo = "";
-    if (r.driver_first_name) {
-      driverInfo = `<div class="meta">Chauffeur : ${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}${r.driver_phone ? " · 📞 " + escapeHtml(r.driver_phone) : ""}</div>`;
-    }
-    let actions = "";
-    if (r.status !== "cancelled") {
-      actions += `<button class="btn-secondary btn-small" onclick="adminResetRide('${r.id}')">Remettre en attente</button>`;
-      actions += `<button class="btn-danger btn-small" onclick="adminCancelRide('${r.id}')">Annuler</button>`;
-    }
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+  if (!data || data.length === 0) { el.innerHTML = `<p class="info">Aucun trajet enregistré.</p>`; return; }
+  el.innerHTML = data.map(r => {
+    const driverInfo = r.driver_first_name
+      ? `<div class="meta">Chauffeur : ${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}${r.driver_phone ? " · 📞 " + escapeHtml(r.driver_phone) : ""}</div>`
+      : "";
+    const actions = r.status !== "cancelled"
+      ? `<button class="btn-secondary btn-small" onclick="adminResetRide('${r.id}')">Remettre en attente</button>
+         <button class="btn-danger btn-small" onclick="adminCancelRide('${r.id}')">Annuler</button>`
+      : "";
     return `
       <div class="ride-item">
         <div class="top-actions">
@@ -950,8 +1017,7 @@ async function refreshAdminRides() {
         ${driverInfo}
         ${r.driver_comment ? `<div class="comment-box">"${escapeHtml(r.driver_comment)}"</div>` : ""}
         ${actions}
-      </div>
-    `;
+      </div>`;
   }).join("");
 }
 
@@ -965,6 +1031,108 @@ async function adminResetRide(rideId) {
   if (!confirm("Remettre ce trajet en attente (sans chauffeur) ?")) return;
   const { error } = await sb.rpc("admin_reset_ride", { p_admin_id: guest.id, p_ride_id: rideId });
   if (!error) await refreshAdminRides();
+}
+
+// --- Sous-onglet Utilisateurs ---
+async function refreshAdminUsers() {
+  const el = document.getElementById("adminContent");
+  const { data, error } = await sb.rpc("list_all_guests_admin", { p_admin_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+  if (!data || data.length === 0) { el.innerHTML = `<p class="info">Aucun utilisateur inscrit.</p>`; return; }
+  el.innerHTML = data.map(u => {
+    const vehicleInfo = u.has_vehicle
+      ? `🚗 Chauffeur (${u.vehicle_seats ?? "?"} places)`
+      : "🚶 Piéton";
+    const contactParts = [u.phone, u.email].filter(Boolean).map(escapeHtml);
+    return `
+      <div class="user-item">
+        <div class="user-info">
+          <div class="user-name">
+            ${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}
+            ${u.is_admin ? `<span class="badge badge-admin" style="font-size:0.65rem;vertical-align:middle">Admin</span>` : ""}
+          </div>
+          <div class="user-meta">${vehicleInfo}</div>
+          ${contactParts.length ? `<div class="user-meta">${contactParts.join(" · ")}</div>` : ""}
+        </div>
+        <div class="user-stats">
+          <div>📋 ${u.nb_requests} demande${u.nb_requests != 1 ? "s" : ""}</div>
+          <div>🚗 ${u.nb_driving} trajet${u.nb_driving != 1 ? "s" : ""} conduit${u.nb_driving != 1 ? "s" : ""}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+// --- Sous-onglet Lieux ---
+async function refreshAdminLocations() {
+  const el = document.getElementById("adminContent");
+  const { data, error } = await sb.rpc("list_all_locations_admin", { p_admin_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+
+  const official = (data || []).filter(l => l.sort_order < 99);
+  const custom   = (data || []).filter(l => l.sort_order >= 99);
+
+  const locRow = (l) => {
+    const isOff = l.sort_order < 99;
+    return `
+      <div class="loc-item" id="locrow-${l.id}">
+        <span class="loc-name ${isOff ? "loc-official" : "loc-custom"}">${escapeHtml(l.name)}</span>
+        ${!isOff ? `<button class="btn-secondary btn-small" onclick="adminPromoteLocation('${l.id}')">Officialiser</button>` : ""}
+        <button class="btn-secondary btn-small" onclick="adminRenameLocationPrompt('${l.id}','${escapeHtml(l.name).replace(/'/g,"\\'")}')">Renommer</button>
+        <button class="btn-danger btn-small" onclick="adminDeleteLocation('${l.id}')">✕</button>
+      </div>`;
+  };
+
+  el.innerHTML = `
+    <h3 style="font-size:0.9rem;color:var(--primary-dark);margin:0 0 8px">Lieux officiels</h3>
+    ${official.length ? official.map(locRow).join("") : `<p class="info">Aucun lieu officiel.</p>`}
+    <h3 style="font-size:0.9rem;color:var(--primary-dark);margin:12px 0 8px">Lieux ajoutés par les utilisateurs</h3>
+    ${custom.length ? custom.map(locRow).join("") : `<p class="info">Aucun lieu ajouté.</p>`}
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <label>Ajouter un lieu officiel</label>
+      <input type="text" id="newLocName" placeholder="Nom du lieu" />
+      <button class="btn-primary btn-small" style="margin-top:8px" onclick="adminAddOfficialLocation()">Ajouter</button>
+      <p id="newLocError" class="error hidden"></p>
+    </div>`;
+}
+
+async function adminAddOfficialLocation() {
+  const name = document.getElementById("newLocName").value.trim();
+  const errEl = document.getElementById("newLocError");
+  errEl.classList.add("hidden");
+  if (!name) return;
+  const { error } = await sb.rpc("admin_add_location", { p_admin_id: guest.id, p_name: name, p_sort_order: 50 });
+  if (error) {
+    errEl.textContent = error.message === "name_already_exists" ? "Ce lieu existe déjà." : "Erreur : " + error.message;
+    errEl.classList.remove("hidden");
+    return;
+  }
+  locations = []; // reset cache pour recharger
+  await refreshAdminLocations();
+}
+
+async function adminPromoteLocation(locId) {
+  const { error } = await sb.rpc("admin_set_location_order", { p_admin_id: guest.id, p_location_id: locId, p_sort_order: 50 });
+  if (!error) { locations = []; await refreshAdminLocations(); }
+}
+
+async function adminRenameLocationPrompt(locId, currentName) {
+  const newName = prompt("Nouveau nom du lieu :", currentName);
+  if (!newName || newName.trim() === currentName) return;
+  const { error } = await sb.rpc("admin_rename_location", { p_admin_id: guest.id, p_location_id: locId, p_name: newName.trim() });
+  if (error) { alert("Erreur : " + error.message); return; }
+  locations = [];
+  await refreshAdminLocations();
+}
+
+async function adminDeleteLocation(locId) {
+  if (!confirm("Supprimer ce lieu ? (Impossible s'il est utilisé dans un trajet)")) return;
+  const { error } = await sb.rpc("admin_delete_location", { p_admin_id: guest.id, p_location_id: locId });
+  if (error) {
+    alert(error.message === "location_in_use" ? "Ce lieu est utilisé dans un trajet, impossible de le supprimer." : "Erreur : " + error.message);
+    return;
+  }
+  locations = [];
+  await refreshAdminLocations();
 }
 
 // ---------------------------------------------------------------------------
