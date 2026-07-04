@@ -136,10 +136,9 @@
   .top-actions a { font-size: 0.8rem; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
   .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .checkbox-row input { width: auto; }
-  .cap-ok   { color: #166534; font-size: 0.8rem; }
-  .cap-tight { color: #92400e; font-size: 0.8rem; }
-  .cap-over  { color: #991b1b; font-size: 0.8rem; }
-  .cap-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 0.78rem; }
+  .cap-over  { color: #991b1b; font-size: 0.8rem; font-weight: 600; }
+  .add-location-row { margin-top: 6px; }
+  .add-location-row .info { font-size: 0.78rem; color: var(--muted); font-style: italic; }
   .seats-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
   .seats-row label { margin: 0; white-space: nowrap; }
   .seats-row input { width: 70px; }
@@ -163,7 +162,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v1.4 - 2026-07-04 11:30";
+const APP_VERSION = "v1.5 - 2026-07-04 14:00";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -221,8 +220,40 @@ function locationOptions(selectedId) {
   for (const l of locations) {
     html += `<option value="${l.id}" ${l.id === selectedId ? "selected" : ""}>${escapeHtml(l.name)}</option>`;
   }
-  html += `<option value="__custom__">Autre (préciser)</option>`;
+  html += `<option value="__add__">+ Ajouter un nouveau lieu…</option>`;
   return html;
+}
+
+// Affiche le champ d'ajout de lieu et gère la sauvegarde en base
+function wireLocationSelect(selectId, addRowId, addInputId, addBtnId) {
+  const sel = document.getElementById(selectId);
+  const row = document.getElementById(addRowId);
+  sel.onchange = () => row.classList.toggle("hidden", sel.value !== "__add__");
+  document.getElementById(addBtnId).onclick = async () => {
+    const name = document.getElementById(addInputId).value.trim();
+    if (!name) return;
+    const { data, error } = await sb.rpc("add_location", { p_name: name });
+    if (error || !data || !data.length) return;
+    const loc = data[0];
+    // Ajouter à la liste locale si absent
+    if (!locations.find(l => l.id === loc.id)) {
+      locations.push({ id: loc.id, name: loc.name });
+    }
+    // Reconstruire les options et sélectionner le nouveau lieu
+    sel.innerHTML = locationOptions(loc.id);
+    row.classList.add("hidden");
+    document.getElementById(addInputId).value = "";
+    sel.value = loc.id;
+  };
+}
+
+function locationAddRowHtml(addRowId, addInputId, addBtnId, placeholder) {
+  return `
+    <div id="${addRowId}" class="add-location-row hidden">
+      <input id="${addInputId}" type="text" placeholder="${placeholder}" />
+      <p class="info" style="margin:4px 0 0;">Précisez les détails de rendez-vous avec votre chauffeur/passager par commentaire ou téléphone.</p>
+      <button type="button" class="btn-secondary btn-small" id="${addBtnId}" style="margin-top:6px;">Enregistrer ce lieu</button>
+    </div>`;
 }
 
 async function render() {
@@ -478,14 +509,8 @@ function statusBadge(status) {
 }
 
 function capacityIndicator(nbPersons, vehicleSeats) {
-  if (!vehicleSeats) return "";
-  if (nbPersons <= vehicleSeats - 1) {
-    return `<span class="cap-ok" title="Vous avez la place (${vehicleSeats} places)">🟢 ${nbPersons}/${vehicleSeats} places</span>`;
-  } else if (nbPersons === vehicleSeats) {
-    return `<span class="cap-tight" title="Juste assez de place (${vehicleSeats} places)">🟡 ${nbPersons}/${vehicleSeats} places — serré</span>`;
-  } else {
-    return `<span class="cap-over" title="Pas assez de place — vous avez ${vehicleSeats} places, ${nbPersons} demandées">🔴 ${nbPersons} pers. demandées / ${vehicleSeats} places — insuffisant</span>`;
-  }
+  if (!vehicleSeats || nbPersons <= vehicleSeats) return "";
+  return `<span class="cap-over">⚠️ Places insuffisantes</span>`;
 }
 
 function newRideFormHtml() {
@@ -505,10 +530,10 @@ function newRideFormHtml() {
         </div>
         <label for="departureSelect">Lieu de départ</label>
         <select id="departureSelect">${locationOptions(null)}</select>
-        <input id="departureCustom" type="text" placeholder="Préciser le lieu de départ" class="hidden" style="margin-top:6px;" />
+        ${locationAddRowHtml("depAddRow","depAddInput","depAddBtn","ex: Parking de la mairie")}
         <label for="arrivalSelect">Lieu d'arrivée</label>
         <select id="arrivalSelect">${locationOptions(null)}</select>
-        <input id="arrivalCustom" type="text" placeholder="Préciser le lieu d'arrivée" class="hidden" style="margin-top:6px;" />
+        ${locationAddRowHtml("arrAddRow","arrAddInput","arrAddBtn","ex: Hôtel du Lac")}
         <label for="nbPersons">Nombre de personnes</label>
         <input id="nbPersons" type="number" min="1" max="8" value="1" required />
         <div class="checkbox-row">
@@ -522,10 +547,8 @@ function newRideFormHtml() {
 }
 
 function wireNewRideForm(onSuccessCallback) {
-  document.getElementById("departureSelect").onchange = (e) =>
-    document.getElementById("departureCustom").classList.toggle("hidden", e.target.value !== "__custom__");
-  document.getElementById("arrivalSelect").onchange = (e) =>
-    document.getElementById("arrivalCustom").classList.toggle("hidden", e.target.value !== "__custom__");
+  wireLocationSelect("departureSelect","depAddRow","depAddInput","depAddBtn");
+  wireLocationSelect("arrivalSelect","arrAddRow","arrAddInput","arrAddBtn");
   document.getElementById("newRideForm").onsubmit = async (e) => {
     e.preventDefault();
     await handleCreateRide(onSuccessCallback);
@@ -538,22 +561,20 @@ async function handleCreateRide(onSuccess) {
   const date = document.getElementById("rideDate").value;
   const time = document.getElementById("rideTime").value;
   const depSelect = document.getElementById("departureSelect").value;
-  const depCustom = document.getElementById("departureCustom").value.trim();
   const arrSelect = document.getElementById("arrivalSelect").value;
-  const arrCustom = document.getElementById("arrivalCustom").value.trim();
   const nbPersons = parseInt(document.getElementById("nbPersons").value, 10);
   const hasLuggage = document.getElementById("hasLuggage").checked;
 
   if (!date || !time) { errEl.textContent = "Merci de renseigner la date et l'heure."; errEl.classList.remove("hidden"); return; }
-  if (!depSelect || (depSelect === "__custom__" && !depCustom)) { errEl.textContent = "Merci de renseigner le lieu de départ."; errEl.classList.remove("hidden"); return; }
-  if (!arrSelect || (arrSelect === "__custom__" && !arrCustom)) { errEl.textContent = "Merci de renseigner le lieu d'arrivée."; errEl.classList.remove("hidden"); return; }
+  if (!depSelect || depSelect === "__add__") { errEl.textContent = "Merci de sélectionner ou d'enregistrer le lieu de départ."; errEl.classList.remove("hidden"); return; }
+  if (!arrSelect || arrSelect === "__add__") { errEl.textContent = "Merci de sélectionner ou d'enregistrer le lieu d'arrivée."; errEl.classList.remove("hidden"); return; }
 
   const { error } = await sb.rpc("create_ride_request", {
     p_requester_id: guest.id, p_ride_date: date, p_ride_time: time,
-    p_departure_location_id: depSelect === "__custom__" ? null : depSelect,
-    p_departure_custom: depSelect === "__custom__" ? depCustom : null,
-    p_arrival_location_id: arrSelect === "__custom__" ? null : arrSelect,
-    p_arrival_custom: arrSelect === "__custom__" ? arrCustom : null,
+    p_departure_location_id: depSelect,
+    p_departure_custom: null,
+    p_arrival_location_id: arrSelect,
+    p_arrival_custom: null,
     p_nb_persons: nbPersons, p_has_luggage: hasLuggage
   });
 
@@ -657,11 +678,6 @@ async function renderDriverRequestsTab() {
       <div class="top-actions">
         <h2 style="margin:0;">Demandes disponibles</h2>
         ${guest.vehicle_seats ? `<span class="meta" style="font-size:0.8rem;">🚗 ${guest.vehicle_seats} places</span>` : ""}
-      </div>
-      <div class="cap-legend">
-        <span class="cap-ok">🟢 place disponible</span>
-        <span class="cap-tight">🟡 juste assez</span>
-        <span class="cap-over">🔴 insuffisant</span>
       </div>
       <div id="availableRidesList" style="margin-top:10px;"><p class="info">Chargement...</p></div>
     </div>
