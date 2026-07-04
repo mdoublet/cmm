@@ -136,6 +136,13 @@
   .top-actions a { font-size: 0.8rem; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
   .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .checkbox-row input { width: auto; }
+  .cap-ok   { color: #166534; font-size: 0.8rem; }
+  .cap-tight { color: #92400e; font-size: 0.8rem; }
+  .cap-over  { color: #991b1b; font-size: 0.8rem; }
+  .cap-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 0.78rem; }
+  .seats-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .seats-row label { margin: 0; white-space: nowrap; }
+  .seats-row input { width: 70px; }
 </style>
 </head>
 <body>
@@ -150,14 +157,13 @@
 
 <nav class="tabbar hidden" id="tabbar">
   <button id="tabRequests" class="active">Mes trajets</button>
-  <button id="tabDriver" class="hidden">Chauffeur</button>
   <button id="tabAdmin" class="hidden">Admin</button>
-  <button id="tabProfile">Profil</button>
+  <button id="tabProfile">Mon profil</button>
   <button id="tabLogout">Déconnexion</button>
 </nav>
 
 <script>
-const APP_VERSION = "v1.3 - 2026-07-04 09:00";
+const APP_VERSION = "v1.4 - 2026-07-04 11:30";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -167,14 +173,13 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const STORAGE_KEY = "covoit_guest";
 let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 let locations = [];
-let currentTab = guest && guest.has_vehicle ? "driver" : "requests";
+let currentTab = "requests";
 let showNewRideForm = false;
 
 const app = document.getElementById("app");
 const headerSub = document.getElementById("headerSub");
 const tabbar = document.getElementById("tabbar");
 const tabRequests = document.getElementById("tabRequests");
-const tabDriver = document.getElementById("tabDriver");
 const tabAdmin = document.getElementById("tabAdmin");
 const tabProfile = document.getElementById("tabProfile");
 const tabLogout = document.getElementById("tabLogout");
@@ -200,7 +205,6 @@ function logout() {
 }
 
 tabRequests.onclick = () => { currentTab = "requests"; showNewRideForm = false; render(); };
-tabDriver.onclick = () => { currentTab = "driver"; render(); };
 tabAdmin.onclick = () => { currentTab = "admin"; render(); };
 tabProfile.onclick = () => { currentTab = "profile"; render(); };
 tabLogout.onclick = logout;
@@ -230,23 +234,24 @@ async function render() {
   }
   tabbar.classList.remove("hidden");
   headerSub.textContent = `Bonjour ${guest.first_name} !`;
-  tabDriver.classList.toggle("hidden", !guest.has_vehicle);
   tabAdmin.classList.toggle("hidden", !guest.is_admin);
   tabRequests.classList.toggle("active", currentTab === "requests");
-  tabDriver.classList.toggle("active", currentTab === "driver");
   tabAdmin.classList.toggle("active", currentTab === "admin");
   tabProfile.classList.toggle("active", currentTab === "profile");
 
   await loadLocations();
 
-  if (currentTab === "driver" && guest.has_vehicle) {
-    await renderDriverTab();
-  } else if (currentTab === "admin" && guest.is_admin) {
+  if (currentTab === "admin" && guest.is_admin) {
     await renderAdminTab();
   } else if (currentTab === "profile") {
     await renderProfileTab();
   } else {
-    await renderRequestsTab();
+    // "requests" : contenu différent selon piéton/chauffeur
+    if (guest.has_vehicle) {
+      await renderDriverRequestsTab();
+    } else {
+      await renderPassengerRequestsTab();
+    }
   }
 }
 
@@ -353,6 +358,10 @@ function renderRegister(prefillEmail = "") {
         <input id="regHasVehicle" type="checkbox" />
         <label for="regHasVehicle" style="margin:0;">J'ai un véhicule et je peux conduire d'autres invités</label>
       </div>
+      <div id="regSeatsRow" class="seats-row hidden">
+        <label for="regSeats">Nombre de places passagers :</label>
+        <input id="regSeats" type="number" min="1" max="9" value="3" />
+      </div>
 
       <hr style="margin:16px 0; border:none; border-top:1px solid var(--border);" />
       <p style="font-size:0.85rem;color:var(--muted);margin:0 0 8px;">Définissez un code secret à 6 chiffres pour vous connecter.</p>
@@ -369,6 +378,8 @@ function renderRegister(prefillEmail = "") {
   `;
   document.getElementById("btnRegister").onclick = handleRegister;
   document.getElementById("btnBackFromRegister").onclick = renderLogin;
+  document.getElementById("regHasVehicle").onchange = (e) =>
+    document.getElementById("regSeatsRow").classList.toggle("hidden", !e.target.checked);
 }
 
 async function handleRegister() {
@@ -377,6 +388,7 @@ async function handleRegister() {
   const email     = document.getElementById("regEmail").value.trim();
   const phone     = document.getElementById("regPhone").value.trim();
   const hasVehicle = document.getElementById("regHasVehicle").checked;
+  const vehicleSeats = hasVehicle ? parseInt(document.getElementById("regSeats").value, 10) || null : null;
   const pin       = document.getElementById("regPin").value.trim();
   const pinConfirm = document.getElementById("regPinConfirm").value.trim();
   const errEl = document.getElementById("regError");
@@ -390,7 +402,7 @@ async function handleRegister() {
 
   const { data, error } = await sb.rpc("register_guest", {
     p_email: email, p_first_name: firstName, p_last_name: lastName,
-    p_phone: phone || null, p_has_vehicle: hasVehicle, p_code: pin
+    p_phone: phone || null, p_has_vehicle: hasVehicle, p_vehicle_seats: vehicleSeats, p_code: pin
   });
 
   if (error || !data || data.length === 0) {
@@ -404,7 +416,7 @@ async function handleRegister() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, is_admin: g.is_admin });
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
   currentTab = g.has_vehicle ? "driver" : "requests";
   render();
 }
@@ -431,7 +443,7 @@ async function handleSetCode() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, is_admin: g.is_admin });
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
   currentTab = g.has_vehicle ? "driver" : "requests";
   render();
 }
@@ -452,30 +464,32 @@ async function handleVerifyCode() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, is_admin: g.is_admin });
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
   currentTab = g.has_vehicle ? "driver" : "requests";
   render();
 }
 
 // ---------------------------------------------------------------------------
-// MES TRAJETS (demandeur)
+// UTILITAIRES COMMUNS
 // ---------------------------------------------------------------------------
 function statusBadge(status) {
   const labels = { pending: "En attente", proposed: "Proposition", confirmed: "Confirmé", cancelled: "Annulé" };
   return `<span class="badge badge-${status}">${labels[status] || status}</span>`;
 }
 
-async function renderRequestsTab() {
-  app.innerHTML = `
-    <div class="card">
-      <div class="top-actions">
-        <h2 style="margin:0;">Mes demandes</h2>
-        <button class="btn-primary btn-small" id="btnToggleNewRide" style="margin:0;">
-          ${showNewRideForm ? "Annuler" : "+ Nouvelle demande"}
-        </button>
-      </div>
-      <div id="myRidesList"><p class="info">Chargement...</p></div>
-    </div>
+function capacityIndicator(nbPersons, vehicleSeats) {
+  if (!vehicleSeats) return "";
+  if (nbPersons <= vehicleSeats - 1) {
+    return `<span class="cap-ok" title="Vous avez la place (${vehicleSeats} places)">🟢 ${nbPersons}/${vehicleSeats} places</span>`;
+  } else if (nbPersons === vehicleSeats) {
+    return `<span class="cap-tight" title="Juste assez de place (${vehicleSeats} places)">🟡 ${nbPersons}/${vehicleSeats} places — serré</span>`;
+  } else {
+    return `<span class="cap-over" title="Pas assez de place — vous avez ${vehicleSeats} places, ${nbPersons} demandées">🔴 ${nbPersons} pers. demandées / ${vehicleSeats} places — insuffisant</span>`;
+  }
+}
+
+function newRideFormHtml() {
+  return `
     <div class="card ${showNewRideForm ? "" : "hidden"}" id="newRideCard">
       <h2>Nouvelle demande de trajet</h2>
       <form id="newRideForm">
@@ -489,53 +503,38 @@ async function renderRequestsTab() {
             <input id="rideTime" type="time" required />
           </div>
         </div>
-
         <label for="departureSelect">Lieu de départ</label>
         <select id="departureSelect">${locationOptions(null)}</select>
         <input id="departureCustom" type="text" placeholder="Préciser le lieu de départ" class="hidden" style="margin-top:6px;" />
-
         <label for="arrivalSelect">Lieu d'arrivée</label>
         <select id="arrivalSelect">${locationOptions(null)}</select>
         <input id="arrivalCustom" type="text" placeholder="Préciser le lieu d'arrivée" class="hidden" style="margin-top:6px;" />
-
         <label for="nbPersons">Nombre de personnes</label>
         <input id="nbPersons" type="number" min="1" max="8" value="1" required />
-
         <div class="checkbox-row">
           <input id="hasLuggage" type="checkbox" />
           <label for="hasLuggage" style="margin:0;">Avec bagages</label>
         </div>
-
         <button class="btn-primary" type="submit">Envoyer la demande</button>
         <div class="error hidden" id="newRideError"></div>
       </form>
-    </div>
-  `;
-
-  document.getElementById("btnToggleNewRide").onclick = () => {
-    showNewRideForm = !showNewRideForm;
-    renderRequestsTab();
-  };
-
-  document.getElementById("departureSelect").onchange = (e) => {
-    document.getElementById("departureCustom").classList.toggle("hidden", e.target.value !== "__custom__");
-  };
-  document.getElementById("arrivalSelect").onchange = (e) => {
-    document.getElementById("arrivalCustom").classList.toggle("hidden", e.target.value !== "__custom__");
-  };
-
-  document.getElementById("newRideForm").onsubmit = async (e) => {
-    e.preventDefault();
-    await handleCreateRide();
-  };
-
-  await refreshMyRides();
+    </div>`;
 }
 
-async function handleCreateRide() {
+function wireNewRideForm(onSuccessCallback) {
+  document.getElementById("departureSelect").onchange = (e) =>
+    document.getElementById("departureCustom").classList.toggle("hidden", e.target.value !== "__custom__");
+  document.getElementById("arrivalSelect").onchange = (e) =>
+    document.getElementById("arrivalCustom").classList.toggle("hidden", e.target.value !== "__custom__");
+  document.getElementById("newRideForm").onsubmit = async (e) => {
+    e.preventDefault();
+    await handleCreateRide(onSuccessCallback);
+  };
+}
+
+async function handleCreateRide(onSuccess) {
   const errEl = document.getElementById("newRideError");
   errEl.classList.add("hidden");
-
   const date = document.getElementById("rideDate").value;
   const time = document.getElementById("rideTime").value;
   const depSelect = document.getElementById("departureSelect").value;
@@ -545,56 +544,58 @@ async function handleCreateRide() {
   const nbPersons = parseInt(document.getElementById("nbPersons").value, 10);
   const hasLuggage = document.getElementById("hasLuggage").checked;
 
-  if (!date || !time) {
-    errEl.textContent = "Merci de renseigner la date et l'heure.";
-    errEl.classList.remove("hidden");
-    return;
-  }
-  if (!depSelect || (depSelect === "__custom__" && !depCustom)) {
-    errEl.textContent = "Merci de renseigner le lieu de départ.";
-    errEl.classList.remove("hidden");
-    return;
-  }
-  if (!arrSelect || (arrSelect === "__custom__" && !arrCustom)) {
-    errEl.textContent = "Merci de renseigner le lieu d'arrivée.";
-    errEl.classList.remove("hidden");
-    return;
-  }
+  if (!date || !time) { errEl.textContent = "Merci de renseigner la date et l'heure."; errEl.classList.remove("hidden"); return; }
+  if (!depSelect || (depSelect === "__custom__" && !depCustom)) { errEl.textContent = "Merci de renseigner le lieu de départ."; errEl.classList.remove("hidden"); return; }
+  if (!arrSelect || (arrSelect === "__custom__" && !arrCustom)) { errEl.textContent = "Merci de renseigner le lieu d'arrivée."; errEl.classList.remove("hidden"); return; }
 
   const { error } = await sb.rpc("create_ride_request", {
-    p_requester_id: guest.id,
-    p_ride_date: date,
-    p_ride_time: time,
+    p_requester_id: guest.id, p_ride_date: date, p_ride_time: time,
     p_departure_location_id: depSelect === "__custom__" ? null : depSelect,
     p_departure_custom: depSelect === "__custom__" ? depCustom : null,
     p_arrival_location_id: arrSelect === "__custom__" ? null : arrSelect,
     p_arrival_custom: arrSelect === "__custom__" ? arrCustom : null,
-    p_nb_persons: nbPersons,
-    p_has_luggage: hasLuggage
+    p_nb_persons: nbPersons, p_has_luggage: hasLuggage
   });
 
-  if (error) {
-    errEl.textContent = "Erreur lors de l'envoi de la demande.";
-    errEl.classList.remove("hidden");
-    return;
-  }
-
+  if (error) { errEl.textContent = "Erreur lors de l'envoi de la demande."; errEl.classList.remove("hidden"); return; }
   showNewRideForm = false;
-  await renderRequestsTab();
+  if (onSuccess) onSuccess(); else render();
+}
+
+// ---------------------------------------------------------------------------
+// VUE PIÉTON — Mes trajets
+// ---------------------------------------------------------------------------
+async function renderPassengerRequestsTab() {
+  app.innerHTML = `
+    <div class="card">
+      <div class="top-actions">
+        <h2 style="margin:0;">Mes trajets</h2>
+        <button class="btn-primary btn-small" id="btnToggleNewRide" style="margin:0;">
+          ${showNewRideForm ? "✕ Annuler" : "+ Nouvelle demande"}
+        </button>
+      </div>
+      <div id="myRidesList"><p class="info">Chargement...</p></div>
+    </div>
+    ${newRideFormHtml()}
+  `;
+  document.getElementById("btnToggleNewRide").onclick = () => {
+    showNewRideForm = !showNewRideForm;
+    renderPassengerRequestsTab();
+  };
+  if (showNewRideForm) wireNewRideForm(() => renderPassengerRequestsTab());
+  await refreshMyRides();
 }
 
 async function refreshMyRides() {
   const listEl = document.getElementById("myRidesList");
   const { data, error } = await sb.rpc("list_my_ride_requests", { p_requester_id: guest.id });
-  if (error) {
-    listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`;
-    return;
-  }
+  if (error) { listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
   if (!data || data.length === 0) {
-    listEl.innerHTML = `<p class="info">Vous n'avez pas encore de demande de trajet.</p>`;
+    listEl.innerHTML = `<p class="info">Vous n'avez pas encore de demande. Utilisez "+ Nouvelle demande" pour en créer une.</p>`;
     return;
   }
-  listEl.innerHTML = data.map(r => {
+  // ordre chronologique croissant (déjà trié par la RPC)
+  listEl.innerHTML = data.filter(r => r.status !== "cancelled").map(r => {
     let actions = "";
     if (r.status === "proposed") {
       actions = `
@@ -602,19 +603,19 @@ async function refreshMyRides() {
           <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong> propose de vous prendre en charge.
           ${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}
         </div>
-        <button class="btn-primary btn-small" onclick="confirmRide('${r.id}')">Accepter</button>
-        <button class="btn-secondary btn-small" onclick="rejectRide('${r.id}')">Refuser</button>
+        <button class="btn-primary btn-small" onclick="confirmRide('${r.id}')">✓ Accepter</button>
+        <button class="btn-secondary btn-small" onclick="rejectRide('${r.id}')">✕ Refuser</button>
       `;
     } else if (r.status === "confirmed") {
       actions = `
         <div class="comment-box">
-          Trajet confirmé avec <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong>
+          ✅ Confirmé avec <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong>
           ${r.driver_phone ? ` — 📞 ${escapeHtml(r.driver_phone)}` : ""}
           ${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}
         </div>
       `;
     } else if (r.status === "pending") {
-      actions = `<button class="btn-danger btn-small" onclick="cancelMyRide('${r.id}')">Annuler la demande</button>`;
+      actions = `<button class="btn-danger btn-small" onclick="cancelMyRide('${r.id}')">Annuler</button>`;
     }
     return `
       <div class="ride-item">
@@ -623,11 +624,10 @@ async function refreshMyRides() {
           <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
         </div>
         <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
-        <div class="meta">${r.nb_persons} pers. ${r.has_luggage ? "· avec bagages" : ""}</div>
+        <div class="meta">${r.nb_persons} pers. ${r.has_luggage ? "· 🧳 bagages" : ""}</div>
         ${actions}
-      </div>
-    `;
-  }).join("");
+      </div>`;
+  }).join("") || `<p class="info">Aucun trajet actif.</p>`;
 }
 
 async function confirmRide(rideId) {
@@ -645,45 +645,51 @@ async function cancelMyRide(rideId) {
 }
 
 // ---------------------------------------------------------------------------
-// MODE CHAUFFEUR
+// VUE CHAUFFEUR — Mes trajets (pris en charge + disponibles)
 // ---------------------------------------------------------------------------
-async function renderDriverTab() {
+async function renderDriverRequestsTab() {
   app.innerHTML = `
     <div class="card">
-      <h2>Trajets disponibles</h2>
-      <div id="availableRidesList"><p class="info">Chargement...</p></div>
-    </div>
-    <div class="card">
-      <h2>Mes prises en charge</h2>
+      <h2>Mes trajets pris en charge</h2>
       <div id="myDrivenRidesList"><p class="info">Chargement...</p></div>
     </div>
+    <div class="card">
+      <div class="top-actions">
+        <h2 style="margin:0;">Demandes disponibles</h2>
+        ${guest.vehicle_seats ? `<span class="meta" style="font-size:0.8rem;">🚗 ${guest.vehicle_seats} places</span>` : ""}
+      </div>
+      <div class="cap-legend">
+        <span class="cap-ok">🟢 place disponible</span>
+        <span class="cap-tight">🟡 juste assez</span>
+        <span class="cap-over">🔴 insuffisant</span>
+      </div>
+      <div id="availableRidesList" style="margin-top:10px;"><p class="info">Chargement...</p></div>
+    </div>
   `;
-  await refreshAvailableRides();
   await refreshMyDrivenRides();
+  await refreshAvailableRides();
 }
 
 async function refreshAvailableRides() {
   const listEl = document.getElementById("availableRidesList");
   const { data, error } = await sb.rpc("list_available_rides", { p_driver_id: guest.id });
-  if (error) {
-    listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`;
-    return;
-  }
+  if (error) { listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
   if (!data || data.length === 0) {
-    listEl.innerHTML = `<p class="info">Aucun trajet disponible pour le moment.</p>`;
+    listEl.innerHTML = `<p class="info">Aucune demande en attente pour le moment.</p>`;
     return;
   }
+  const seats = guest.vehicle_seats;
   listEl.innerHTML = data.map(r => `
     <div class="ride-item">
       <div class="top-actions">
-        ${statusBadge("pending")}
-        <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+        <span>${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+        ${capacityIndicator(r.nb_persons, seats)}
       </div>
       <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
-      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)} · ${r.nb_persons} pers. ${r.has_luggage ? "· avec bagages" : ""}</div>
+      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)} · ${r.nb_persons} pers. ${r.has_luggage ? "· 🧳 bagages" : ""}</div>
       <label for="comment-${r.id}" style="margin-top:8px;">Commentaire / conditions (optionnel)</label>
       <textarea id="comment-${r.id}" placeholder="ex: RDV 10 min avant, départ ponctuel..."></textarea>
-      <button class="btn-primary btn-small" onclick="proposeRide('${r.id}')">Je prends en charge ce trajet</button>
+      <button class="btn-primary btn-small" onclick="proposeRide('${r.id}')">Je prends en charge</button>
     </div>
   `).join("");
 }
@@ -691,21 +697,15 @@ async function refreshAvailableRides() {
 async function proposeRide(rideId) {
   const comment = document.getElementById(`comment-${rideId}`).value.trim();
   const { error } = await sb.rpc("propose_ride", { p_driver_id: guest.id, p_ride_id: rideId, p_comment: comment || null });
-  if (!error) {
-    await refreshAvailableRides();
-    await refreshMyDrivenRides();
-  }
+  if (!error) { await refreshAvailableRides(); await refreshMyDrivenRides(); }
 }
 
 async function refreshMyDrivenRides() {
   const listEl = document.getElementById("myDrivenRidesList");
   const { data, error } = await sb.rpc("list_my_driven_rides", { p_driver_id: guest.id });
-  if (error) {
-    listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`;
-    return;
-  }
+  if (error) { listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
   if (!data || data.length === 0) {
-    listEl.innerHTML = `<p class="info">Vous n'avez pas encore pris de trajet en charge.</p>`;
+    listEl.innerHTML = `<p class="info">Aucun trajet pris en charge pour le moment.</p>`;
     return;
   }
   listEl.innerHTML = data.map(r => `
@@ -716,11 +716,11 @@ async function refreshMyDrivenRides() {
       </div>
       <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
       <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}
-        ${r.requester_phone ? ` · 📞 ${escapeHtml(r.requester_phone)}` : ""}
-        · ${r.nb_persons} pers. ${r.has_luggage ? "· avec bagages" : ""}</div>
+        ${r.requester_phone && r.status === "confirmed" ? ` · 📞 ${escapeHtml(r.requester_phone)}` : ""}
+        · ${r.nb_persons} pers. ${r.has_luggage ? "· 🧳 bagages" : ""}</div>
       <label for="edit-comment-${r.id}" style="margin-top:8px;">Commentaire / conditions</label>
       <textarea id="edit-comment-${r.id}">${escapeHtml(r.driver_comment || "")}</textarea>
-      <button class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour le commentaire</button>
+      <button class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour</button>
       <button class="btn-danger btn-small" onclick="cancelProposal('${r.id}')">Annuler ma prise en charge</button>
     </div>
   `).join("");
@@ -733,12 +733,9 @@ async function updateComment(rideId) {
 }
 
 async function cancelProposal(rideId) {
-  if (!confirm("Annuler votre prise en charge de ce trajet ? Il redeviendra disponible pour les autres chauffeurs.")) return;
+  if (!confirm("Annuler votre prise en charge ? Le trajet redeviendra disponible.")) return;
   const { error } = await sb.rpc("cancel_driver_proposal", { p_driver_id: guest.id, p_ride_id: rideId });
-  if (!error) {
-    await refreshAvailableRides();
-    await refreshMyDrivenRides();
-  }
+  if (!error) { await refreshAvailableRides(); await refreshMyDrivenRides(); }
 }
 
 // ---------------------------------------------------------------------------
@@ -768,6 +765,10 @@ async function renderProfileTab() {
         <input id="profHasVehicle" type="checkbox" ${(p.has_vehicle ?? guest.has_vehicle) ? "checked" : ""} />
         <label for="profHasVehicle" style="margin:0;">J'ai un véhicule et je peux conduire d'autres invités</label>
       </div>
+      <div id="profSeatsRow" class="seats-row ${(p.has_vehicle ?? guest.has_vehicle) ? "" : "hidden"}">
+        <label for="profSeats">Nombre de places passagers :</label>
+        <input id="profSeats" type="number" min="1" max="9" value="${p.vehicle_seats ?? guest.vehicle_seats ?? 3}" />
+      </div>
 
       <button class="btn-primary" id="btnSaveProfile" style="margin-top:16px;">Enregistrer les modifications</button>
       <div class="error hidden" id="profileError"></div>
@@ -793,7 +794,8 @@ async function renderProfileTab() {
     const lastName   = document.getElementById("profLastName").value.trim();
     const email      = document.getElementById("profEmail").value.trim();
     const phone      = document.getElementById("profPhone").value.trim();
-    const hasVehicle = document.getElementById("profHasVehicle").checked;
+    const hasVehicle   = document.getElementById("profHasVehicle").checked;
+    const vehicleSeats = hasVehicle ? parseInt(document.getElementById("profSeats").value, 10) || null : null;
     const errEl = document.getElementById("profileError");
     const okEl  = document.getElementById("profileSuccess");
     errEl.classList.add("hidden");
@@ -807,7 +809,7 @@ async function renderProfileTab() {
 
     const { data, error } = await sb.rpc("update_guest_profile", {
       p_guest_id: guest.id, p_first_name: firstName, p_last_name: lastName,
-      p_email: email, p_phone: phone || null, p_has_vehicle: hasVehicle
+      p_email: email, p_phone: phone || null, p_has_vehicle: hasVehicle, p_vehicle_seats: vehicleSeats
     });
 
     if (error) {
@@ -821,13 +823,16 @@ async function renderProfileTab() {
     const updated = data && data.length ? data[0] : {};
     guest.first_name = updated.first_name || firstName;
     guest.last_name  = updated.last_name  || lastName;
-    guest.has_vehicle = updated.has_vehicle ?? hasVehicle;
+    guest.has_vehicle   = updated.has_vehicle   ?? hasVehicle;
+    guest.vehicle_seats = updated.vehicle_seats ?? vehicleSeats;
     saveGuest(guest);
     okEl.textContent = "Informations mises à jour.";
     okEl.classList.remove("hidden");
     headerSub.textContent = `Bonjour ${guest.first_name} !`;
-    tabDriver.classList.toggle("hidden", !guest.has_vehicle);
   };
+
+  document.getElementById("profHasVehicle").onchange = (e) =>
+    document.getElementById("profSeatsRow").classList.toggle("hidden", !e.target.checked);
 
   document.getElementById("btnChangePin").onclick = async () => {
     const oldPin    = document.getElementById("oldPin").value.trim();
