@@ -330,7 +330,7 @@
 
 <header>
   <h1>Caroline &amp; Marc</h1>
-  <div class="sub" id="headerSub">5 septembre 2026 · Villa 180° Mer, L'Houmeau</div>
+  <div class="sub" id="headerSub">5 septembre 2026</div>
   <div class="version" id="versionBanner"></div>
 </header>
 
@@ -471,7 +471,7 @@ function locationAddRowHtml(addRowId, addInputId, addBtnId, placeholder) {
 async function render() {
   if (!guest) {
     tabbar.classList.add("hidden");
-    headerSub.textContent = "5 sept. 2026 · L'Houmeau";
+    headerSub.textContent = "5 septembre 2026";
     renderLogin();
     return;
   }
