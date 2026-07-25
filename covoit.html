@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>Covoiturage Mariage</title>
+<title>Mariage Caroline &amp; Marc</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Great+Vibes&family=Playfair+Display:wght@600&display=swap" rel="stylesheet" />
@@ -36,17 +36,23 @@
     margin: 0 auto;
   }
   header {
-    background: var(--primary-dark);
-    color: #fff;
-    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px 8px;
     text-align: center;
     position: sticky;
     top: 0;
     z-index: 10;
   }
-  header h1 { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 600; }
-  header .sub { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
-  header .version { font-size: 0.65rem; opacity: 0.5; margin-top: 3px; }
+  header h1 {
+    font-family: 'Great Vibes', cursive;
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: var(--primary-dark);
+    line-height: 1.1;
+  }
+  header .sub { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+  header .version { font-size: 0.6rem; color: var(--border-strong); margin-top: 2px; }
   main { padding: 16px; }
   .card {
     background: var(--card);
@@ -101,8 +107,8 @@
     position: fixed;
     bottom: 0; left: 0; right: 0;
     display: flex;
-    background: var(--primary-dark);
-    border-top: 1px solid var(--primary);
+    background: #fff;
+    border-top: 1px solid var(--border);
     z-index: 10;
   }
   .tabbar button {
@@ -111,12 +117,17 @@
     border-radius: 0;
     border: none;
     background: none;
-    color: rgba(255,255,255,0.55);
-    padding: 10px 4px;
-    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 10px 4px 8px;
+    font-size: 0.72rem;
     font-weight: 500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
   }
-  .tabbar button.active { color: #fff; font-weight: 700; }
+  .tabbar button .tab-icon { font-size: 1.25rem; line-height: 1; }
+  .tabbar button.active { color: var(--primary); font-weight: 700; }
   .ride-item {
     background: #fff;
     border: 1px solid var(--border);
@@ -237,9 +248,10 @@
   }
   .rsvp-option .opt-label { flex: 1; font-size: 0.93rem; font-weight: 500; }
   .rsvp-option .opt-sub   { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
-  .rsvp-attend-btns { display: flex; gap: 10px; margin-bottom: 16px; }
-  .rsvp-attend-btns button { flex: 1; margin: 0; }
-  .rsvp-attend-btns button.selected { background: var(--primary); color: #fff; border-color: var(--primary-dark); }
+  .rsvp-attend-btns { display: flex; gap: 10px; margin: 10px 0 16px; }
+  .rsvp-attend-btns button { flex: 1; margin: 0; padding: 12px 8px; font-size: 0.9rem; }
+  .rsvp-attend-btns button.selected-yes { background: var(--primary); color: #fff; border-color: var(--primary-dark); }
+  .rsvp-attend-btns button.selected-no  { background: var(--danger);  color: #fff; border-color: #7a1515; }
   .rsvp-summary-badge {
     display: inline-block;
     font-size: 0.72rem;
@@ -280,24 +292,21 @@
 <body>
 
 <header>
-  <h1>🚗 Covoiturage du mariage</h1>
-  <div class="sub" id="headerSub">Connectez-vous pour gérer vos trajets</div>
+  <h1>Caroline &amp; Marc</h1>
+  <div class="sub" id="headerSub">5 septembre 2026 · Villa 180° Mer, L'Houmeau</div>
   <div class="version" id="versionBanner"></div>
 </header>
 
 <main id="app"></main>
 
 <nav class="tabbar hidden" id="tabbar">
-  <button id="tabRequests" class="active">Trajets</button>
-  <button id="tabRsvp">Présence</button>
-  <button id="tabAdmin" class="hidden">Admin</button>
-  <button id="tabHelp">Aide</button>
-  <button id="tabProfile">Profil</button>
-  <button id="tabLogout">Quitter</button>
+  <button id="tabRsvp"><span class="tab-icon">✉️</span>Présence</button>
+  <button id="tabRequests"><span class="tab-icon">🚗</span>Covoiturage</button>
+  <button id="tabProfile" class="active"><span class="tab-icon">👤</span>Profil</button>
 </nav>
 
 <script>
-const APP_VERSION = "v2.2 - 2026-07-04 21:00";
+const APP_VERSION = "v2.3 - 2026-07-25 10:00";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -308,18 +317,16 @@ const STORAGE_KEY = "covoit_guest";
 let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 let locations = [];
 let adminSubTab = "rides"; // "rides" | "users" | "locations" | "rsvp"
-let currentTab = "requests";
+let currentTab = "profile";
 let showNewRideForm = false;
+let ridesSubTab = "requests"; // "requests" | "accepted"
 
 const app = document.getElementById("app");
 const headerSub = document.getElementById("headerSub");
 const tabbar = document.getElementById("tabbar");
 const tabRequests = document.getElementById("tabRequests");
 const tabRsvp    = document.getElementById("tabRsvp");
-const tabAdmin = document.getElementById("tabAdmin");
-const tabHelp = document.getElementById("tabHelp");
 const tabProfile = document.getElementById("tabProfile");
-const tabLogout = document.getElementById("tabLogout");
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
@@ -343,10 +350,7 @@ function logout() {
 
 tabRequests.onclick = () => { currentTab = "requests"; showNewRideForm = false; render(); };
 tabRsvp.onclick    = () => { currentTab = "rsvp"; render(); };
-tabAdmin.onclick   = () => { currentTab = "admin"; render(); };
-tabHelp.onclick    = () => { currentTab = "help"; render(); };
 tabProfile.onclick = () => { currentTab = "profile"; render(); };
-tabLogout.onclick  = logout;
 
 async function loadLocations() {
   if (locations.length) return locations;
@@ -413,35 +417,24 @@ function locationAddRowHtml(addRowId, addInputId, addBtnId, placeholder) {
 async function render() {
   if (!guest) {
     tabbar.classList.add("hidden");
-    headerSub.textContent = "Connectez-vous pour gérer vos trajets";
+    headerSub.textContent = "5 sept. 2026 · L'Houmeau";
     renderLogin();
     return;
   }
   tabbar.classList.remove("hidden");
-  headerSub.textContent = `Bonjour ${guest.first_name} !`;
-  tabAdmin.classList.toggle("hidden", !guest.is_admin);
+  headerSub.textContent = `${guest.first_name} ${guest.last_name}`;
+  tabRsvp.classList.toggle("active",     currentTab === "rsvp");
   tabRequests.classList.toggle("active", currentTab === "requests");
-  tabRsvp.classList.toggle("active",    currentTab === "rsvp");
-  tabAdmin.classList.toggle("active",   currentTab === "admin");
-  tabHelp.classList.toggle("active",    currentTab === "help");
-  tabProfile.classList.toggle("active", currentTab === "profile");
+  tabProfile.classList.toggle("active",  currentTab === "profile");
 
   await loadLocations();
 
   if (currentTab === "rsvp") {
     await renderRsvpTab();
-  } else if (currentTab === "admin" && guest.is_admin) {
-    await renderAdminTab();
-  } else if (currentTab === "help") {
-    renderHelpTab();
   } else if (currentTab === "profile") {
     await renderProfileTab();
   } else {
-    if (guest.has_vehicle) {
-      await renderDriverRequestsTab();
-    } else {
-      await renderPassengerRequestsTab();
-    }
+    await renderRidesTab();
   }
 }
 
@@ -747,71 +740,117 @@ async function handleCreateRide(onSuccess) {
 }
 
 // ---------------------------------------------------------------------------
-// VUE PIÉTON — Mes trajets
+// VUE TRAJETS UNIFIÉE (piéton + chauffeur avec sous-onglets)
 // ---------------------------------------------------------------------------
-async function renderPassengerRequestsTab() {
+async function renderRidesTab() {
+  const isDriver = guest.has_vehicle;
   app.innerHTML = `
     <div class="card">
-      <div class="top-actions">
-        <h2 style="margin:0;">Mes trajets</h2>
-        <button class="btn-primary btn-small" id="btnToggleNewRide" style="margin:0;">
-          ${showNewRideForm ? "✕ Annuler" : "+ Nouvelle demande"}
+      <div class="subtabbar">
+        <button id="sTabRequests" onclick="setRidesSubTab('requests')">
+          ${isDriver ? "Demandes" : "Mes demandes"}
+        </button>
+        <button id="sTabAccepted" onclick="setRidesSubTab('accepted')">
+          ${isDriver ? "Mes prises en charge" : "Confirmés"}
         </button>
       </div>
-      <div id="myRidesList"><p class="info">Chargement...</p></div>
+      <div id="ridesContent"><p class="info">Chargement…</p></div>
     </div>
-    ${newRideFormHtml()}
+    <div id="newRideFormContainer">${showNewRideForm ? newRideFormHtml() : ""}</div>
   `;
-  document.getElementById("btnToggleNewRide").onclick = () => {
-    showNewRideForm = !showNewRideForm;
-    renderPassengerRequestsTab();
-  };
-  if (showNewRideForm) wireNewRideForm(() => renderPassengerRequestsTab());
-  await refreshMyRides();
+  updateRidesSubTabBtns();
+  if (showNewRideForm) wireNewRideForm(() => { showNewRideForm = false; renderRidesTab(); });
+  await refreshRidesContent();
 }
 
-async function refreshMyRides() {
-  const listEl = document.getElementById("myRidesList");
-  const { data, error } = await sb.rpc("list_my_ride_requests", { p_requester_id: guest.id });
-  if (error) { listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
-  if (!data || data.length === 0) {
-    listEl.innerHTML = `<p class="info">Vous n'avez pas encore de demande. Utilisez "+ Nouvelle demande" pour en créer une.</p>`;
-    return;
+function updateRidesSubTabBtns() {
+  document.getElementById("sTabRequests")?.classList.toggle("active", ridesSubTab === "requests");
+  document.getElementById("sTabAccepted")?.classList.toggle("active", ridesSubTab === "accepted");
+}
+
+async function setRidesSubTab(tab) {
+  ridesSubTab = tab;
+  updateRidesSubTabBtns();
+  await refreshRidesContent();
+}
+
+async function refreshRidesContent() {
+  if (ridesSubTab === "requests") {
+    if (guest.has_vehicle) await refreshAvailableRides();
+    else await refreshMyRides();
+  } else {
+    if (guest.has_vehicle) await refreshMyDrivenRides();
+    else await refreshMyConfirmedRides();
   }
-  // ordre chronologique croissant (déjà trié par la RPC)
-  listEl.innerHTML = data.filter(r => r.status !== "cancelled").map(r => {
+}
+
+// Groupe une liste de trajets par date, retourne du HTML
+function groupByDate(rides, renderFn) {
+  if (!rides.length) return `<p class="info">Aucun trajet.</p>`;
+  const groups = {};
+  for (const r of rides) {
+    if (!groups[r.ride_date]) groups[r.ride_date] = [];
+    groups[r.ride_date].push(r);
+  }
+  return Object.entries(groups)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([date, items]) => `
+      <div class="section-title" style="margin-top:10px">${fmtDateLong(date)}</div>
+      ${items.sort((a,b) => a.ride_time.localeCompare(b.ride_time)).map(renderFn).join("")}
+    `).join("");
+}
+
+function fmtDateLong(d) {
+  const dt = new Date(d + "T00:00:00");
+  return dt.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+}
+
+async function renderPassengerRequestsTab() { ridesSubTab = "requests"; await renderRidesTab(); }
+async function renderDriverRequestsTab()    { ridesSubTab = "requests"; await renderRidesTab(); }
+
+async function refreshMyRides() {
+  const el = document.getElementById("ridesContent");
+  const { data, error } = await sb.rpc("list_my_ride_requests", { p_requester_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+  const active = (data || []).filter(r => r.status === "pending" || r.status === "proposed");
+
+  const btnHtml = `<button class="btn-primary btn-small" id="btnToggleNewRide" style="float:right;margin:0 0 10px">${showNewRideForm ? "✕ Annuler" : "+ Nouvelle demande"}</button><div style="clear:both"></div>`;
+
+  const renderRow = (r) => {
     let actions = "";
     if (r.status === "proposed") {
       actions = `
-        <div class="comment-box">
-          <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong> propose de vous prendre en charge.
-          ${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}
-        </div>
+        <div class="comment-box"><strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong> propose de vous prendre en charge.${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}</div>
         <button class="btn-primary btn-small" onclick="confirmRide('${r.id}')">✓ Accepter</button>
-        <button class="btn-secondary btn-small" onclick="rejectRide('${r.id}')">✕ Refuser</button>
-      `;
-    } else if (r.status === "confirmed") {
-      actions = `
-        <div class="comment-box">
-          ✅ Confirmé avec <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong>
-          ${r.driver_phone ? ` — 📞 ${escapeHtml(r.driver_phone)}` : ""}
-          ${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}
-        </div>
-      `;
-    } else if (r.status === "pending") {
-      actions = `<button class="btn-danger btn-small" onclick="cancelMyRide('${r.id}')">Annuler</button>`;
+        <button class="btn-secondary btn-small" onclick="rejectRide('${r.id}')">✕ Refuser</button>`;
+    } else {
+      actions = `<button class="btn-danger btn-small" onclick="cancelMyRide('${r.id}')">Annuler la demande</button>`;
     }
-    return `
-      <div class="ride-item">
-        <div class="top-actions">
-          ${statusBadge(r.status)}
-          <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
-        </div>
-        <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
-        <div class="meta">${r.nb_persons} pers. ${r.has_luggage ? "· 🧳 bagages" : ""}</div>
-        ${actions}
-      </div>`;
-  }).join("") || `<p class="info">Aucun trajet actif.</p>`;
+    return `<div class="ride-item">${statusBadge(r.status)}<div class="route" style="margin-top:6px">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div><div class="meta">${fmtTime(r.ride_time)} · ${r.nb_persons} pers.${r.has_luggage ? " · 🧳" : ""}</div>${actions}</div>`;
+  };
+
+  el.innerHTML = btnHtml + (active.length ? groupByDate(active, renderRow) : `<p class="info">Aucune demande en cours. Créez-en une avec le bouton ci-dessus.</p>`);
+  document.getElementById("btnToggleNewRide").onclick = () => {
+    showNewRideForm = !showNewRideForm;
+    const c = document.getElementById("newRideFormContainer");
+    if (showNewRideForm) { c.innerHTML = newRideFormHtml(); wireNewRideForm(() => { showNewRideForm = false; renderRidesTab(); }); }
+    else c.innerHTML = "";
+    document.getElementById("btnToggleNewRide").textContent = showNewRideForm ? "✕ Annuler" : "+ Nouvelle demande";
+  };
+}
+
+async function refreshMyConfirmedRides() {
+  const el = document.getElementById("ridesContent");
+  const { data, error } = await sb.rpc("list_my_ride_requests", { p_requester_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+  const confirmed = (data || []).filter(r => r.status === "confirmed");
+  const renderRow = (r) => `
+    <div class="ride-item">
+      <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
+      <div class="meta">${fmtTime(r.ride_time)} · ${r.nb_persons} pers.${r.has_luggage ? " · 🧳" : ""}</div>
+      <div class="comment-box">✅ <strong>${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}</strong>${r.driver_phone ? ` · 📞 ${escapeHtml(r.driver_phone)}` : ""}${r.driver_comment ? `<br/><em>"${escapeHtml(r.driver_comment)}"</em>` : ""}</div>
+    </div>`;
+  el.innerHTML = confirmed.length ? groupByDate(confirmed, renderRow) : `<p class="info">Aucun trajet confirmé pour le moment.</p>`;
 }
 
 async function confirmRide(rideId) {
@@ -850,27 +889,24 @@ async function renderDriverRequestsTab() {
 }
 
 async function refreshAvailableRides() {
-  const listEl = document.getElementById("availableRidesList");
+  const el = document.getElementById("ridesContent");
   const { data, error } = await sb.rpc("list_available_rides", { p_driver_id: guest.id });
-  if (error) { listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
-  if (!data || data.length === 0) {
-    listEl.innerHTML = `<p class="info">Aucune demande en attente pour le moment.</p>`;
-    return;
-  }
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+  if (!data || data.length === 0) { el.innerHTML = `<p class="info">Aucune demande en attente pour le moment.</p>`; return; }
   const seats = guest.vehicle_seats;
-  listEl.innerHTML = data.map(r => `
+  const renderRow = (r) => `
     <div class="ride-item">
-      <div class="top-actions">
-        <span>${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="meta">${fmtTime(r.ride_time)}</span>
         ${capacityIndicator(r.nb_persons, seats)}
       </div>
       <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
-      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)} · ${r.nb_persons} pers. ${r.has_luggage ? "· 🧳 bagages" : ""}</div>
-      <label for="comment-${r.id}" style="margin-top:8px;">Commentaire / conditions (optionnel)</label>
-      <textarea id="comment-${r.id}" placeholder="ex: RDV 10 min avant, départ ponctuel..."></textarea>
+      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)} · ${r.nb_persons} pers.${r.has_luggage ? " · 🧳" : ""}</div>
+      <label style="margin-top:8px;">Commentaire (optionnel)</label>
+      <textarea id="comment-${r.id}" placeholder="ex: RDV 10 min avant…" style="min-height:48px"></textarea>
       <button class="btn-primary btn-small" onclick="proposeRide('${r.id}')">Je prends en charge</button>
-    </div>
-  `).join("");
+    </div>`;
+  el.innerHTML = groupByDate(data, renderRow);
 }
 
 async function proposeRide(rideId) {
@@ -880,29 +916,23 @@ async function proposeRide(rideId) {
 }
 
 async function refreshMyDrivenRides() {
-  const listEl = document.getElementById("myDrivenRidesList");
+  const el = document.getElementById("ridesContent");
   const { data, error } = await sb.rpc("list_my_driven_rides", { p_driver_id: guest.id });
-  if (error) { listEl.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
-  if (!data || data.length === 0) {
-    listEl.innerHTML = `<p class="info">Aucun trajet pris en charge pour le moment.</p>`;
-    return;
-  }
-  listEl.innerHTML = data.map(r => `
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+  if (!data || data.length === 0) { el.innerHTML = `<p class="info">Aucun trajet pris en charge pour le moment.</p>`; return; }
+  const renderRow = (r) => `
     <div class="ride-item">
-      <div class="top-actions">
+      <div style="display:flex;justify-content:space-between;align-items:center">
         ${statusBadge(r.status)}
-        <span class="meta">${fmtDate(r.ride_date)} à ${fmtTime(r.ride_time)}</span>
+        <span class="meta">${fmtTime(r.ride_time)}</span>
       </div>
       <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
-      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}
-        ${r.requester_phone && r.status === "confirmed" ? ` · 📞 ${escapeHtml(r.requester_phone)}` : ""}
-        · ${r.nb_persons} pers. ${r.has_luggage ? "· 🧳 bagages" : ""}</div>
-      <label for="edit-comment-${r.id}" style="margin-top:8px;">Commentaire / conditions</label>
-      <textarea id="edit-comment-${r.id}">${escapeHtml(r.driver_comment || "")}</textarea>
-      <button class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour</button>
+      <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}${r.requester_phone && r.status === "confirmed" ? ` · 📞 ${escapeHtml(r.requester_phone)}` : ""} · ${r.nb_persons} pers.${r.has_luggage ? " · 🧳" : ""}</div>
+      <textarea id="edit-comment-${r.id}" style="min-height:48px;margin-top:8px">${escapeHtml(r.driver_comment || "")}</textarea>
+      <button class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour le commentaire</button>
       <button class="btn-danger btn-small" onclick="cancelProposal('${r.id}')">Annuler ma prise en charge</button>
-    </div>
-  `).join("");
+    </div>`;
+  el.innerHTML = groupByDate(data, renderRow);
 }
 
 async function updateComment(rideId) {
@@ -966,6 +996,17 @@ async function renderProfileTab() {
       <div class="error hidden" id="pinError"></div>
       <div class="info hidden" id="pinSuccess"></div>
     </div>
+
+    ${guest.is_admin ? `
+    <div class="card">
+      <h2>Administration</h2>
+      <p class="info" style="margin-bottom:10px">Accès réservé aux administrateurs.</p>
+      <button class="btn-secondary" id="btnGoAdmin">⚙️ Panneau d'administration</button>
+    </div>` : ""}
+
+    <div class="card">
+      <button class="btn-danger" id="btnLogout">Se déconnecter</button>
+    </div>
   `;
 
   document.getElementById("btnSaveProfile").onclick = async () => {
@@ -1007,7 +1048,7 @@ async function renderProfileTab() {
     saveGuest(guest);
     okEl.textContent = "Informations mises à jour.";
     okEl.classList.remove("hidden");
-    headerSub.textContent = `Bonjour ${guest.first_name} !`;
+    headerSub.textContent = `${guest.first_name} ${guest.last_name}`;
   };
 
   document.getElementById("profHasVehicle").onchange = (e) =>
@@ -1044,6 +1085,11 @@ async function renderProfileTab() {
     document.getElementById("newPin").value = "";
     document.getElementById("newPinConfirm").value = "";
   };
+
+  document.getElementById("btnLogout").onclick = logout;
+  if (guest.is_admin) {
+    document.getElementById("btnGoAdmin").onclick = () => { currentTab = "admin"; adminSubTab = "rides"; render(); };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1332,8 +1378,8 @@ function _renderRsvpForm(r) {
 
       <label style="margin-top:0">Serez-vous présent(e) ?</label>
       <div class="rsvp-attend-btns">
-        <button id="btnAttendYes" class="btn-secondary${attending === true ? ' selected' : ''}" onclick="setRsvpAttending(true)">✓ Oui, je viens</button>
-        <button id="btnAttendNo"  class="btn-secondary${attending === false ? ' selected' : ''}" onclick="setRsvpAttending(false)">✗ Je ne pourrai pas</button>
+        <button id="btnAttendYes" class="btn-secondary${attending === true ? ' selected-yes' : ''}" onclick="setRsvpAttending(true)">✓ Oui, je viens</button>
+        <button id="btnAttendNo"  class="btn-secondary${attending === false ? ' selected-no' : ''}" onclick="setRsvpAttending(false)">✗ Je ne pourrai pas</button>
       </div>
 
       <div id="rsvpDetails" class="${attending ? '' : 'hidden'}">
@@ -1364,17 +1410,19 @@ function toggleRsvpOption(el) {
 }
 
 function setRsvpAttending(val) {
-  document.getElementById('btnAttendYes').classList.toggle('selected', val === true);
-  document.getElementById('btnAttendNo').classList.toggle('selected',  val === false);
+  const yes = document.getElementById('btnAttendYes');
+  const no  = document.getElementById('btnAttendNo');
+  yes.className = 'btn-secondary' + (val === true  ? ' selected-yes' : '');
+  no.className  = 'btn-secondary' + (val === false ? ' selected-no'  : '');
   document.getElementById('rsvpDetails').classList.toggle('hidden', !val);
 }
 
 async function saveRsvp() {
   const btn = document.getElementById('btnSaveRsvp');
   const msg = document.getElementById('rsvpMsg');
-  const attending = document.getElementById('btnAttendYes').classList.contains('selected')
+  const attending = document.getElementById('btnAttendYes').classList.contains('selected-yes')
     ? true
-    : document.getElementById('btnAttendNo').classList.contains('selected')
+    : document.getElementById('btnAttendNo').classList.contains('selected-no')
       ? false
       : null;
   if (attending === null) {
