@@ -306,7 +306,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v2.3 - 2026-07-25 10:00";
+const APP_VERSION = "v2.4 - 2026-07-25 10:30";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -443,10 +443,9 @@ async function render() {
 // ---------------------------------------------------------------------------
 function renderLogin() {
   app.innerHTML = `
-    <div class="wedding-banner">
-      <div class="names">Caroline &amp; Marc</div>
-      <div class="details">5 septembre 2026<br>Villa 180° Mer · L'Houmeau</div>
-    </div>
+    <img src="https://raw.githubusercontent.com/mdoublet/cmm/main/tourslr.png"
+         alt="Tours de La Rochelle"
+         style="width:100%;border-radius:12px;display:block;margin-bottom:16px;object-fit:cover;max-height:200px;" />
     <div class="card">
       <h2>Connexion</h2>
       <div id="loginStep1">
