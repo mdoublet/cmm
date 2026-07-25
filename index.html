@@ -319,7 +319,8 @@
 <nav class="tabbar hidden" id="tabbar">
   <button id="tabRsvp"><span class="tab-icon">✉️</span>Présence</button>
   <button id="tabRequests"><span class="tab-icon">🚗</span>Covoiturage</button>
-  <button id="tabProfile" class="active"><span class="tab-icon">👤</span>Profil</button>
+  <button id="tabInfo"><span class="tab-icon">ℹ️</span>Infos</button>
+  <button id="tabProfile"><span class="tab-icon">👤</span>Profil</button>
   <button id="tabAdminReport" class="hidden"><span class="tab-icon">📊</span>Admin</button>
 </nav>
 
@@ -342,6 +343,7 @@ function isAdminEmail() {
 
 let adminSubTab = "rides"; // "rides" | "users" | "locations" | "rsvp"
 let adminReportSubTab = "rsvp"; // "rsvp" | "rides"
+let infoSubTab = "programme"; // "programme" | "acces" | "hebergement" | "dresscode" | "cadeau" | "covoit"
 let currentTab = "profile";
 let showNewRideForm = false;
 let ridesSubTab = "requests"; // "requests" | "accepted"
@@ -351,6 +353,7 @@ const headerSub = document.getElementById("headerSub");
 const tabbar = document.getElementById("tabbar");
 const tabRequests    = document.getElementById("tabRequests");
 const tabRsvp        = document.getElementById("tabRsvp");
+const tabInfo        = document.getElementById("tabInfo");
 const tabProfile     = document.getElementById("tabProfile");
 const tabAdminReport = document.getElementById("tabAdminReport");
 
@@ -376,6 +379,7 @@ function logout() {
 
 tabRequests.onclick    = () => { currentTab = "requests"; showNewRideForm = false; render(); };
 tabRsvp.onclick        = () => { currentTab = "rsvp"; render(); };
+tabInfo.onclick        = () => { currentTab = "info"; infoSubTab = "programme"; render(); };
 tabProfile.onclick     = () => { currentTab = "profile"; render(); };
 tabAdminReport.onclick = () => { currentTab = "adminReport"; adminReportSubTab = "rsvp"; render(); };
 
@@ -452,6 +456,7 @@ async function render() {
   headerSub.textContent = `${guest.first_name} ${guest.last_name}`;
   tabRsvp.classList.toggle("active",        currentTab === "rsvp");
   tabRequests.classList.toggle("active",    currentTab === "requests");
+  tabInfo.classList.toggle("active",        currentTab === "info");
   tabProfile.classList.toggle("active",     currentTab === "profile");
   tabAdminReport.classList.toggle("active", currentTab === "adminReport");
   // Fallback : si l'email n'est pas encore en localStorage, utiliser is_admin
@@ -464,6 +469,8 @@ async function render() {
     await renderRsvpTab();
   } else if (currentTab === "profile") {
     await renderProfileTab();
+  } else if (currentTab === "info") {
+    renderInfoTab();
   } else if (currentTab === "adminReport" || currentTab === "admin") {
     currentTab = "adminReport";
     await renderAdminReportTab();
@@ -1791,28 +1798,194 @@ async function saveRsvp() {
 }
 
 // ---------------------------------------------------------------------------
-// AIDE
+// INFOS PRATIQUES
 // ---------------------------------------------------------------------------
-function renderHelpTab() {
+const INFO_TABS = [
+  { id: "programme",   label: "📅 Programme" },
+  { id: "acces",       label: "📍 Accès" },
+  { id: "hebergement", label: "🏨 Hébergement" },
+  { id: "dresscode",   label: "👗 Dress code" },
+  { id: "cadeau",      label: "🎁 Cadeau" },
+  { id: "covoit",      label: "🚗 Covoiturage" },
+];
+
+function renderInfoTab() {
+  const subtabBtns = INFO_TABS.map(t =>
+    `<button onclick="setInfoSubTab('${t.id}')" class="${infoSubTab===t.id?'active':''}" style="flex:none;white-space:nowrap;font-size:0.78rem;padding:8px 12px">${t.label}</button>`
+  ).join('');
+
   app.innerHTML = `
-    <div class="card">
-      <h2>Carte du mariage</h2>
-      <p class="info">Appuyez sur la carte pour l'agrandir.</p>
-      <a href="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png" target="_blank" rel="noopener">
-        <img src="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png"
-             alt="Carte du mariage"
-             style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;" />
-      </a>
+    <div class="card" style="padding-bottom:4px">
+      <h2>Infos pratiques</h2>
+      <div style="overflow-x:auto;display:flex;gap:6px;padding-bottom:8px;margin:0 -4px;scrollbar-width:none">
+        ${subtabBtns}
+      </div>
     </div>
-    <div class="card">
-      <h2>Comment ça marche ?</h2>
-      <ul style="padding-left:18px;font-size:0.9rem;line-height:1.8;">
-        <li><strong>Piétons</strong> — créez une demande de trajet depuis "Mes trajets". Précisez la date, l'heure et les lieux. Vous serez notifié quand un chauffeur propose de vous prendre en charge.</li>
-        <li><strong>Chauffeurs</strong> — consultez les demandes disponibles dans "Mes trajets". Proposez votre aide et ajoutez un commentaire si besoin (heure de rendez-vous, point de départ exact…). Une fois le passager confirmé, ses coordonnées vous seront visibles.</li>
-        <li><strong>Lieux</strong> — si votre lieu n'est pas dans la liste, ajoutez-le. Précisez les détails du point de rendez-vous par téléphone ou dans les commentaires du trajet.</li>
-      </ul>
-    </div>
+    <div id="infoContent"></div>
   `;
+  _renderInfoContent();
+}
+
+function setInfoSubTab(tab) {
+  infoSubTab = tab;
+  renderInfoTab();
+}
+
+function _renderInfoContent() {
+  const el = document.getElementById('infoContent');
+  if (!el) return;
+
+  if (infoSubTab === 'programme') {
+    el.innerHTML = `
+      <div class="card">
+        <h2>📅 Samedi 5 septembre 2026</h2>
+        <div style="display:flex;flex-direction:column;gap:0">
+          ${progRow('14h00', '💒', 'Cérémonie civile', 'Mairie de La Rochelle', '#1E6A7A')}
+          ${progRow('15h30', '🥂', 'Réception', 'Villa 180° Mer — L\'Houmeau', '#1E6A7A')}
+          ${progRow('15h30', '🍹', 'Rafraîchissements', '', '')}
+          ${progRow('16h30', '🏴‍☠️', 'Chasse au trésor des mariés', '', '')}
+          ${progRow('18h30', '🎶', 'Cocktail dînatoire dansant', '', '')}
+        </div>
+      </div>
+      <div class="card">
+        <h2>☀️ Dimanche 6 septembre 2026</h2>
+        <p style="font-size:0.9rem;line-height:1.6;color:var(--text)">
+          Les festivités continuent à partir de <strong>12h</strong> à la Villa afin de profiter du plaisir d'être tous réunis.
+        </p>
+        <p style="font-size:0.9rem;line-height:1.6;color:var(--text);margin-top:8px">
+          🌊 Une plage est accessible à proximité, et des jacuzzis sont disponibles sur place.<br>
+          🏊 Pensez à amener votre maillot de bain et votre serviette de plage !
+        </p>
+      </div>`;
+  }
+
+  else if (infoSubTab === 'acces') {
+    el.innerHTML = `
+      <div class="card">
+        <h2>💒 Mairie de La Rochelle</h2>
+        <p style="font-size:0.9rem;line-height:1.6">
+          3 place de l'Hôtel de Ville — 17000 La Rochelle<br>
+          <strong>Parking :</strong> Parking souterrain place de Verdun — à 10 minutes à pied
+        </p>
+      </div>
+      <div class="card">
+        <h2>🥂 Villa 180° Mer</h2>
+        <p style="font-size:0.9rem;line-height:1.6">
+          11 rue du Front de Mer — 17137 L'Houmeau<br>
+          À 20 minutes de La Rochelle en voiture<br>
+          <strong>⚠️ Parking interdit devant la villa</strong> — utiliser le parking à 2 minutes à pied<br>
+          Terrains de boules / mölkky et de tennis sur place — amenez votre matériel !
+        </p>
+      </div>
+      <div class="card">
+        <h2>🗺️ Carte</h2>
+        <p class="info" style="margin-bottom:8px">Appuyez sur la carte pour l'agrandir.</p>
+        <a href="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png" target="_blank" rel="noopener">
+          <img src="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png"
+               alt="Carte du mariage"
+               style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;" />
+        </a>
+      </div>`;
+  }
+
+  else if (infoSubTab === 'hebergement') {
+    el.innerHTML = `
+      <div class="card">
+        <h2>🏨 Hébergements à proximité</h2>
+        <div style="font-size:0.9rem;line-height:1.8;display:flex;flex-direction:column;gap:12px">
+          <div>
+            <div style="font-weight:600">⛺ Camping "Au Port de l'Houmeau"</div>
+            <div style="color:var(--muted)">À 15 minutes à pied · <a href="https://campingauport.com" target="_blank" rel="noopener" style="color:var(--primary)">campingauport.com</a></div>
+            <div style="color:var(--danger);font-size:0.82rem;font-weight:500">Réservez vite !</div>
+          </div>
+          <div>
+            <div style="font-weight:600">🚐 Camping-cars</div>
+            <div style="color:var(--muted)">2 rue du Front de Mer — 17137 L'Houmeau · À 2 minutes à pied</div>
+          </div>
+          <div>
+            <div style="font-weight:600">🏠 AirBnB</div>
+            <div style="color:var(--muted)">Plusieurs options au village de L'Houmeau · De 5 à 20 minutes à pied</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  else if (infoSubTab === 'dresscode') {
+    el.innerHTML = `
+      <div class="card">
+        <h2>👗 Samedi 5 septembre — Cérémonie & Soirée</h2>
+        <p style="font-size:0.9rem;line-height:1.6;color:var(--text)">
+          Le dress code est <strong>chic-décontracté</strong>.<br>
+          Soyez élégants tout en restant à l'aise pour profiter pleinement de la soirée et de la piste de danse !
+        </p>
+      </div>
+      <div class="card">
+        <h2>⚓ Dimanche 6 septembre — Journée à la Villa</h2>
+        <p style="font-size:0.9rem;line-height:1.6;color:var(--text)">
+          Pour continuer les festivités dans l'esprit marin de L'Houmeau, nous vous invitons à porter autant que possible une <strong>marinière bleue et blanche</strong>, ou à être habillés en <strong>bleu marine et blanc</strong>.
+        </p>
+        <p style="font-size:0.9rem;line-height:1.6;color:var(--text);margin-top:10px">
+          🌊 Si le temps le permet, n'oubliez pas votre <strong>maillot de bain</strong> et votre <strong>serviette de plage</strong> — il y a une plage à proximité et des jacuzzis sur place !
+        </p>
+      </div>`;
+  }
+
+  else if (infoSubTab === 'cadeau') {
+    el.innerHTML = `
+      <div class="card">
+        <h2>🎁 Le mot des mariés</h2>
+        <p style="font-size:0.92rem;line-height:1.7;color:var(--text)">
+          Votre présence à nos côtés le 5 septembre est le plus beau des cadeaux que vous puissiez nous offrir.
+        </p>
+        <p style="font-size:0.92rem;line-height:1.7;color:var(--text);margin-top:10px">
+          Nous savons que pour nombre d'entre vous — surtout ceux qui viennent de loin — être là représente déjà un effort important. C'est cet effort, ce temps partagé, qui compte vraiment pour nous. Nous n'attendons donc aucun cadeau particulier.
+        </p>
+        <p style="font-size:0.92rem;line-height:1.7;color:var(--text);margin-top:10px">
+          Cela dit, si vous souhaitez tout de même marquer l'occasion, vous pouvez participer à notre voyage de noces aux <strong>Seychelles</strong> en novembre. Chaque contribution, petite ou grande, sera reçue avec infiniment de gratitude et de joie.
+        </p>
+      </div>
+      <div class="card">
+        <h2>🌴 Cagnotte voyage de noces</h2>
+        <div style="background:var(--bg);border-radius:10px;padding:14px;font-size:0.85rem;line-height:1.8">
+          <div style="font-weight:600;color:var(--primary-dark);margin-bottom:6px">Caroline Huyghe</div>
+          <div><span style="color:var(--muted)">IBAN :</span> <strong style="font-family:monospace;letter-spacing:.03em">FR76 3000 4005 3000 0047 1249 532</strong></div>
+          <div><span style="color:var(--muted)">BIC :</span> <strong style="font-family:monospace">BNPAFRPPXXX</strong></div>
+          <div style="margin-top:10px;font-size:0.78rem;color:var(--muted)">Mentionnez votre prénom en référence du virement — merci ! 🙏</div>
+        </div>
+      </div>`;
+  }
+
+  else if (infoSubTab === 'covoit') {
+    el.innerHTML = `
+      <div class="card">
+        <h2>🚗 Comment ça marche ?</h2>
+        <ul style="padding-left:18px;font-size:0.9rem;line-height:1.8;">
+          <li><strong>Piétons / passagers</strong> — créez une demande de trajet depuis l'onglet Covoiturage. Précisez la date, l'heure et les lieux. Un chauffeur pourra vous proposer de vous prendre en charge.</li>
+          <li><strong>Chauffeurs</strong> — consultez les demandes disponibles dans l'onglet Covoiturage. Proposez votre aide et ajoutez un commentaire si besoin (heure de RDV, point exact…). Une fois confirmé, les coordonnées du passager vous sont visibles.</li>
+          <li><strong>Lieux non listés</strong> — si votre lieu n'est pas dans la liste, vous pouvez l'ajouter. Précisez les détails par téléphone ou dans les commentaires du trajet.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>🗺️ Carte des lieux</h2>
+        <p class="info" style="margin-bottom:8px">Appuyez sur la carte pour l'agrandir.</p>
+        <a href="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png" target="_blank" rel="noopener">
+          <img src="https://raw.githubusercontent.com/mdoublet/cmm/main/carte.png"
+               alt="Carte du mariage"
+               style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;" />
+        </a>
+      </div>`;
+  }
+}
+
+function progRow(time, emoji, title, sub, color) {
+  return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+    <div style="min-width:48px;font-weight:700;font-size:0.88rem;color:${color||'var(--primary)'};padding-top:2px">${time}</div>
+    <div style="font-size:1.15rem;padding-top:1px">${emoji}</div>
+    <div>
+      <div style="font-weight:600;font-size:0.9rem">${title}</div>
+      ${sub ? `<div style="font-size:0.78rem;color:var(--muted)">${sub}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 render();
