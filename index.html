@@ -1739,7 +1739,7 @@ function _renderRsvpForm(r) {
         ${rsvpCheckbox('rsvp_ceremony',       ev('ceremony'),       '💍 Cérémonie civile',   'Mairie de La Rochelle')}
         ${rsvpCheckbox('rsvp_reception',      ev('reception'),      '🥂 Réception',           'Villa 180° Mer, L\'Houmeau')}
         ${rsvpCheckbox('rsvp_lunch_next_day', ev('lunch_next_day'), '🍽️ Déjeuner du lendemain', '6 septembre 2026')}
-        ${rsvpCheckbox('rsvp_after_party',    ev('after_party'),    '🎉 After à La Rochelle', 'Soirée du 5 septembre')}
+        ${rsvpCheckbox('rsvp_after_party',    ev('after_party'),    '🎉 After à La Rochelle', 'Soirée du 6 septembre')}
       </div>
 
       <button class="btn-primary" id="btnSaveRsvp" style="margin-top:16px" onclick="saveRsvp()">Enregistrer ma réponse</button>
@@ -1867,8 +1867,8 @@ function _renderInfoContent() {
       <div class="card">
         <h2>☀️ Dimanche 6 septembre 2026</h2>
         <div style="display:flex;flex-direction:column;gap:0;margin-bottom:12px">
-          ${progRow('Nuit', '🎉', 'After à La Rochelle', 'Dans la nuit du samedi au dimanche', '')}
-          ${progRow('12h00', '🍽️', 'Déjeuner à la Villa', 'Les festivités continuent à la Villa 180° Mer', '')}
+          ${progRow('12h00', '🍽️', 'Déjeuner à la Villa', 'Villa 180° Mer — L\'Houmeau', '')}
+          ${progRow('Soir', '🎉', 'After à La Rochelle', '', '')}
         </div>
         <p style="font-size:0.9rem;line-height:1.6;color:var(--text)">
           Profitez du plaisir d'être tous réunis.
