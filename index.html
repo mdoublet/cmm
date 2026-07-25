@@ -1169,6 +1169,9 @@ async function renderProfileTab() {
     document.getElementById("newPinConfirm").value = "";
   };
 
+  markBtnSaved("btnSaveProfile");
+  markBtnSaved("btnChangePin");
+
   document.getElementById("btnLogout").onclick = logout;
   if (guest.is_admin) {
     document.getElementById("btnGoAdmin").onclick = () => { currentTab = "admin"; adminSubTab = "rides"; render(); };
@@ -1794,6 +1797,7 @@ function _renderRsvpForm(r) {
       <button class="btn-primary" id="btnSaveRsvp" style="margin-top:16px" onclick="saveRsvp()">Enregistrer ma réponse</button>
       <p id="rsvpMsg" class="hidden"></p>
     </div>`;
+  if (r) markBtnSaved('btnSaveRsvp');
 }
 
 function rsvpCheckbox(id, checked, label, sub) {
