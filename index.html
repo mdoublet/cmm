@@ -335,7 +335,10 @@ const STORAGE_KEY = "covoit_guest";
 let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 let locations = [];
 const ADMIN_EMAILS = ["carolinehuyghe@gmail.com", "mdoublet@gmail.com"];
-function isAdminEmail() { return guest && ADMIN_EMAILS.includes((guest.email || "").toLowerCase()); }
+function isAdminEmail() {
+  if (!guest) return false;
+  return ADMIN_EMAILS.includes((guest.email || "").toLowerCase()) || !!guest.is_admin;
+}
 
 let adminSubTab = "rides"; // "rides" | "users" | "locations" | "rsvp"
 let adminReportSubTab = "rsvp"; // "rsvp" | "rides"
@@ -451,7 +454,9 @@ async function render() {
   tabRequests.classList.toggle("active",    currentTab === "requests");
   tabProfile.classList.toggle("active",     currentTab === "profile");
   tabAdminReport.classList.toggle("active", currentTab === "adminReport");
-  tabAdminReport.classList.toggle("hidden", !isAdminEmail());
+  // Fallback : si l'email n'est pas encore en localStorage, utiliser is_admin
+  const showAdmin = isAdminEmail() || guest.is_admin;
+  tabAdminReport.classList.toggle("hidden", !showAdmin);
 
   await loadLocations();
 
@@ -459,7 +464,8 @@ async function render() {
     await renderRsvpTab();
   } else if (currentTab === "profile") {
     await renderProfileTab();
-  } else if (currentTab === "adminReport") {
+  } else if (currentTab === "adminReport" || currentTab === "admin") {
+    currentTab = "adminReport";
     await renderAdminReportTab();
   } else {
     await renderRidesTab();
