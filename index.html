@@ -1133,8 +1133,9 @@ async function renderAdminReportTab() {
     <div class="card" style="padding-bottom:4px">
       <h2>📊 Tableau de bord mariés</h2>
       <div class="subtabbar" style="margin-top:8px">
-        <button id="arTabRsvp"  onclick="setAdminReportSubTab('rsvp')"  class="${adminReportSubTab==='rsvp'?'active':''}">✉️ Présences</button>
-        <button id="arTabRides" onclick="setAdminReportSubTab('rides')" class="${adminReportSubTab==='rides'?'active':''}">🚗 Covoiturage</button>
+        <button id="arTabRsvp"   onclick="setAdminReportSubTab('rsvp')"   class="${adminReportSubTab==='rsvp'?'active':''}">✉️ Présences</button>
+        <button id="arTabRides"  onclick="setAdminReportSubTab('rides')"  class="${adminReportSubTab==='rides'?'active':''}">🚗 Covoiturage</button>
+        <button id="arTabGuests" onclick="setAdminReportSubTab('guests')" class="${adminReportSubTab==='guests'?'active':''}">👥 Invités</button>
       </div>
     </div>
     <div id="adminReportContent"><p class="info">Chargement…</p></div>
@@ -1144,15 +1145,16 @@ async function renderAdminReportTab() {
 
 async function setAdminReportSubTab(tab) {
   adminReportSubTab = tab;
-  document.querySelectorAll('#arTabRsvp,#arTabRides').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#arTabRsvp,#arTabRides,#arTabGuests').forEach(b => b.classList.remove('active'));
   const el = document.getElementById('arTab' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (el) el.classList.add('active');
   await refreshAdminReportContent();
 }
 
 async function refreshAdminReportContent() {
-  if (adminReportSubTab === 'rsvp')  await refreshAdminReportRsvp();
-  else                               await refreshAdminReportRides();
+  if (adminReportSubTab === 'rsvp')        await refreshAdminReportRsvp();
+  else if (adminReportSubTab === 'rides')  await refreshAdminReportRides();
+  else                                     await refreshAdminGuests();
 }
 
 async function refreshAdminReportRsvp() {
@@ -1289,6 +1291,127 @@ async function refreshAdminReportRides() {
       ${confirmed.map(rideRow).join('')}
     </div>` : ''}
   `;
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN REPORT — sous-onglet Gestion invités
+// ---------------------------------------------------------------------------
+let adminGuestEditId = null; // id en cours d'édition (inline)
+
+async function refreshAdminGuests() {
+  const el = document.getElementById('adminReportContent');
+  if (!el) return;
+  el.innerHTML = '<p class="info">Chargement…</p>';
+  const { data, error } = await sb.rpc('list_all_guests_admin', { p_admin_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur : ${error.message}</p>`; return; }
+
+  const guests = data || [];
+
+  const rows = guests.map(u => {
+    const vehicle = u.has_vehicle ? `🚗 ${u.vehicle_seats ?? '?'} pl.` : 'Pas de véhicule';
+    const adminBadge = u.is_admin ? `<span class="badge badge-admin" style="font-size:0.62rem;vertical-align:middle;margin-left:4px">Admin</span>` : '';
+    return `
+      <div class="user-item" id="guestRow_${u.guest_id}" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <span style="font-weight:600">${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}</span>${adminBadge}
+            <div style="font-size:0.77rem;color:var(--muted)">${escapeHtml(u.email||'')} ${u.phone ? '· '+escapeHtml(u.phone) : ''}</div>
+            <div style="font-size:0.77rem;color:var(--muted)">${vehicle} · ${u.nb_requests} demande(s) · ${u.nb_driving} conduite(s)</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;margin-left:8px">
+            <button class="btn-secondary" style="font-size:0.75rem;padding:5px 10px;margin:0" onclick="adminGuestEditOpen('${u.guest_id}')">✏️ Modifier</button>
+            <button class="btn-danger"    style="font-size:0.75rem;padding:5px 10px;margin:0" onclick="adminGuestDelete('${u.guest_id}','${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}')">🗑 Suppr.</button>
+          </div>
+        </div>
+        <div id="guestEdit_${u.guest_id}" class="hidden" style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><label style="margin:0 0 2px">Prénom</label><input id="ge_fn_${u.guest_id}" value="${escapeHtml(u.first_name)}" /></div>
+            <div><label style="margin:0 0 2px">Nom</label><input id="ge_ln_${u.guest_id}" value="${escapeHtml(u.last_name)}" /></div>
+          </div>
+          <label style="margin:8px 0 2px">Email</label>
+          <input id="ge_em_${u.guest_id}" type="email" value="${escapeHtml(u.email||'')}" />
+          <label style="margin:8px 0 2px">Téléphone</label>
+          <input id="ge_ph_${u.guest_id}" type="tel" value="${escapeHtml(u.phone||'')}" />
+          <div class="checkbox-row" style="margin-top:10px">
+            <input type="checkbox" id="ge_hv_${u.guest_id}" ${u.has_vehicle?'checked':''} onchange="document.getElementById('ge_vs_row_${u.guest_id}').classList.toggle('hidden',!this.checked)" />
+            <label for="ge_hv_${u.guest_id}" style="margin:0">A un véhicule</label>
+          </div>
+          <div id="ge_vs_row_${u.guest_id}" class="seats-row ${u.has_vehicle?'':'hidden'}" style="margin-top:6px">
+            <label style="margin:0">Places passagers :</label>
+            <input id="ge_vs_${u.guest_id}" type="number" min="1" max="9" value="${u.vehicle_seats??3}" />
+          </div>
+          <div class="checkbox-row" style="margin-top:8px">
+            <input type="checkbox" id="ge_ad_${u.guest_id}" ${u.is_admin?'checked':''} />
+            <label for="ge_ad_${u.guest_id}" style="margin:0">Administrateur</label>
+          </div>
+          <label style="margin:8px 0 2px">Nouveau code PIN (laisser vide = inchangé)</label>
+          <input id="ge_pin_${u.guest_id}" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" style="font-size:1rem;letter-spacing:.2em" />
+          <div id="ge_err_${u.guest_id}" class="error hidden"></div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn-primary" style="flex:1;margin:0;font-size:0.82rem" onclick="adminGuestSave('${u.guest_id}')">✓ Enregistrer</button>
+            <button class="btn-secondary" style="flex:1;margin:0;font-size:0.82rem" onclick="adminGuestEditClose('${u.guest_id}')">Annuler</button>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  el.innerHTML = `
+    <div class="card">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">
+        ${guests.length} invité(s) enregistré(s)
+      </div>
+      ${rows.join('')}
+    </div>`;
+}
+
+function adminGuestEditOpen(id) {
+  if (adminGuestEditId && adminGuestEditId !== id) adminGuestEditClose(adminGuestEditId);
+  adminGuestEditId = id;
+  document.getElementById('guestEdit_' + id)?.classList.remove('hidden');
+}
+function adminGuestEditClose(id) {
+  document.getElementById('guestEdit_' + id)?.classList.add('hidden');
+  if (adminGuestEditId === id) adminGuestEditId = null;
+}
+
+async function adminGuestSave(id) {
+  const errEl = document.getElementById('ge_err_' + id);
+  errEl.classList.add('hidden');
+  const fn  = document.getElementById('ge_fn_' + id).value.trim();
+  const ln  = document.getElementById('ge_ln_' + id).value.trim();
+  const em  = document.getElementById('ge_em_' + id).value.trim();
+  const ph  = document.getElementById('ge_ph_' + id).value.trim();
+  const hv  = document.getElementById('ge_hv_' + id).checked;
+  const vs  = hv ? parseInt(document.getElementById('ge_vs_' + id).value, 10) || null : null;
+  const adm = document.getElementById('ge_ad_' + id).checked;
+  const pin = document.getElementById('ge_pin_' + id).value.trim();
+
+  if (!fn || !ln) { errEl.textContent = 'Prénom et nom obligatoires.'; errEl.classList.remove('hidden'); return; }
+  if (pin && !/^[0-9]{6}$/.test(pin)) { errEl.textContent = 'Le code PIN doit comporter 6 chiffres.'; errEl.classList.remove('hidden'); return; }
+
+  const { error } = await sb.rpc('admin_update_guest', {
+    p_admin_id: guest.id, p_target_id: id,
+    p_first_name: fn, p_last_name: ln, p_email: em || null, p_phone: ph || null,
+    p_has_vehicle: hv, p_vehicle_seats: vs, p_is_admin: adm
+  });
+  if (error) {
+    errEl.textContent = error.message.includes('email_already_used') ? 'Email déjà utilisé.' : 'Erreur : ' + error.message;
+    errEl.classList.remove('hidden'); return;
+  }
+
+  if (pin) {
+    const { error: pinErr } = await sb.rpc('admin_reset_guest_pin', { p_admin_id: guest.id, p_target_id: id, p_new_code: pin });
+    if (pinErr) { errEl.textContent = 'Infos sauvegardées mais erreur PIN : ' + pinErr.message; errEl.classList.remove('hidden'); return; }
+  }
+
+  await refreshAdminGuests();
+}
+
+async function adminGuestDelete(id, name) {
+  if (!confirm(`Supprimer définitivement ${name} ? Toutes ses demandes de covoiturage et son RSVP seront aussi supprimés.`)) return;
+  const { error } = await sb.rpc('admin_delete_guest', { p_admin_id: guest.id, p_target_id: id });
+  if (error) { alert('Erreur : ' + error.message); return; }
+  await refreshAdminGuests();
 }
 
 // ---------------------------------------------------------------------------
