@@ -1053,7 +1053,7 @@ async function renderProfileTab() {
       const msg = error.message || "";
       errEl.textContent = msg.includes("email_already_used")
         ? "Cet email est déjà utilisé par un autre compte."
-        : "Erreur lors de la mise à jour.";
+        : "Erreur : " + (error.message || error.code || JSON.stringify(error));
       errEl.classList.remove("hidden");
       return;
     }
