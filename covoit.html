@@ -216,6 +216,42 @@
     margin: 12px 0 6px;
   }
   .section-title:first-child { margin-top: 0; }
+  .rsvp-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .rsvp-option.selected {
+    border-color: var(--primary);
+    background: #e8f4f7;
+  }
+  .rsvp-option input[type=checkbox], .rsvp-option input[type=radio] {
+    width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--primary);
+  }
+  .rsvp-option .opt-label { flex: 1; font-size: 0.93rem; font-weight: 500; }
+  .rsvp-option .opt-sub   { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
+  .rsvp-attend-btns { display: flex; gap: 10px; margin-bottom: 16px; }
+  .rsvp-attend-btns button { flex: 1; margin: 0; }
+  .rsvp-attend-btns button.selected { background: var(--primary); color: #fff; border-color: var(--primary-dark); }
+  .rsvp-summary-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+  }
+  .rsvp-ok   { background: #d1ead8; color: #1E7A45; }
+  .rsvp-no   { background: var(--danger-bg); color: var(--danger); }
+  .rsvp-none { background: #e5e7eb; color: #6b7280; }
   .wedding-banner {
     background: #D9EBF2;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='24'%3E%3Cpath d='M0 12 Q30 2 60 12 Q90 22 120 12' stroke='%23B8D0D8' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
@@ -252,15 +288,16 @@
 <main id="app"></main>
 
 <nav class="tabbar hidden" id="tabbar">
-  <button id="tabRequests" class="active">Mes trajets</button>
+  <button id="tabRequests" class="active">Trajets</button>
+  <button id="tabRsvp">Présence</button>
   <button id="tabAdmin" class="hidden">Admin</button>
   <button id="tabHelp">Aide</button>
-  <button id="tabProfile">Mon profil</button>
-  <button id="tabLogout">Déconnexion</button>
+  <button id="tabProfile">Profil</button>
+  <button id="tabLogout">Quitter</button>
 </nav>
 
 <script>
-const APP_VERSION = "v2.1 - 2026-07-04 20:30";
+const APP_VERSION = "v2.2 - 2026-07-04 21:00";
 document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
@@ -270,7 +307,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const STORAGE_KEY = "covoit_guest";
 let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 let locations = [];
-let adminSubTab = "rides"; // "rides" | "users" | "locations"
+let adminSubTab = "rides"; // "rides" | "users" | "locations" | "rsvp"
 let currentTab = "requests";
 let showNewRideForm = false;
 
@@ -278,6 +315,7 @@ const app = document.getElementById("app");
 const headerSub = document.getElementById("headerSub");
 const tabbar = document.getElementById("tabbar");
 const tabRequests = document.getElementById("tabRequests");
+const tabRsvp    = document.getElementById("tabRsvp");
 const tabAdmin = document.getElementById("tabAdmin");
 const tabHelp = document.getElementById("tabHelp");
 const tabProfile = document.getElementById("tabProfile");
@@ -304,10 +342,11 @@ function logout() {
 }
 
 tabRequests.onclick = () => { currentTab = "requests"; showNewRideForm = false; render(); };
-tabAdmin.onclick = () => { currentTab = "admin"; render(); };
-tabHelp.onclick = () => { currentTab = "help"; render(); };
+tabRsvp.onclick    = () => { currentTab = "rsvp"; render(); };
+tabAdmin.onclick   = () => { currentTab = "admin"; render(); };
+tabHelp.onclick    = () => { currentTab = "help"; render(); };
 tabProfile.onclick = () => { currentTab = "profile"; render(); };
-tabLogout.onclick = logout;
+tabLogout.onclick  = logout;
 
 async function loadLocations() {
   if (locations.length) return locations;
@@ -382,20 +421,22 @@ async function render() {
   headerSub.textContent = `Bonjour ${guest.first_name} !`;
   tabAdmin.classList.toggle("hidden", !guest.is_admin);
   tabRequests.classList.toggle("active", currentTab === "requests");
-  tabAdmin.classList.toggle("active", currentTab === "admin");
-  tabHelp.classList.toggle("active", currentTab === "help");
+  tabRsvp.classList.toggle("active",    currentTab === "rsvp");
+  tabAdmin.classList.toggle("active",   currentTab === "admin");
+  tabHelp.classList.toggle("active",    currentTab === "help");
   tabProfile.classList.toggle("active", currentTab === "profile");
 
   await loadLocations();
 
-  if (currentTab === "admin" && guest.is_admin) {
+  if (currentTab === "rsvp") {
+    await renderRsvpTab();
+  } else if (currentTab === "admin" && guest.is_admin) {
     await renderAdminTab();
   } else if (currentTab === "help") {
     renderHelpTab();
   } else if (currentTab === "profile") {
     await renderProfileTab();
   } else {
-    // "requests" : contenu différent selon piéton/chauffeur
     if (guest.has_vehicle) {
       await renderDriverRequestsTab();
     } else {
@@ -1016,7 +1057,8 @@ async function renderAdminTab() {
     <div class="card">
       <div class="subtabbar">
         <button id="aTabRides"     onclick="setAdminSubTab('rides')">Trajets</button>
-        <button id="aTabUsers"     onclick="setAdminSubTab('users')">Utilisateurs</button>
+        <button id="aTabUsers"     onclick="setAdminSubTab('users')">Invités</button>
+        <button id="aTabRsvp"      onclick="setAdminSubTab('rsvp')">Présence</button>
         <button id="aTabLocations" onclick="setAdminSubTab('locations')">Lieux</button>
       </div>
       <div id="adminContent"><p class="info">Chargement...</p></div>
@@ -1027,7 +1069,7 @@ async function renderAdminTab() {
 }
 
 function updateAdminSubTabBtns() {
-  ["rides","users","locations"].forEach(t => {
+  ["rides","users","rsvp","locations"].forEach(t => {
     const btn = document.getElementById("aTab" + t.charAt(0).toUpperCase() + t.slice(1));
     if (btn) btn.classList.toggle("active", adminSubTab === t);
   });
@@ -1040,8 +1082,9 @@ async function setAdminSubTab(tab) {
 }
 
 async function refreshAdminContent() {
-  if (adminSubTab === "rides")     await refreshAdminRides();
+  if (adminSubTab === "rides")          await refreshAdminRides();
   else if (adminSubTab === "users")     await refreshAdminUsers();
+  else if (adminSubTab === "rsvp")      await refreshAdminRsvp();
   else if (adminSubTab === "locations") await refreshAdminLocations();
 }
 
@@ -1119,6 +1162,81 @@ async function refreshAdminUsers() {
   // note: colonnes retournées par list_all_guests_admin v2 : guest_id, first_name, last_name…
 }
 
+// --- Sous-onglet Présence (admin) ---
+async function refreshAdminRsvp() {
+  const el = document.getElementById("adminContent");
+  const { data, error } = await sb.rpc("list_all_rsvp_admin", { p_admin_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
+
+  const answered  = (data || []).filter(r => r.has_answered);
+  const attending = answered.filter(r => r.attending);
+  const absent    = answered.filter(r => !r.attending);
+  const pending   = (data || []).filter(r => !r.has_answered);
+
+  const events = [
+    { key: 'ceremony',       label: '💍 Cérémonie civile' },
+    { key: 'reception',      label: '🥂 Réception' },
+    { key: 'lunch_next_day', label: '🍽️ Déjeuner lendemain' },
+    { key: 'after_party',    label: '🎉 After La Rochelle' },
+  ];
+
+  const countBadge = (count, total) =>
+    `<span class="rsvp-summary-badge rsvp-ok">${count}/${total}</span>`;
+
+  const guestRow = (r) => {
+    const badges = r.attending
+      ? events.map(e => r[e.key]
+          ? `<span class="rsvp-summary-badge rsvp-ok">${e.label}</span>`
+          : `<span class="rsvp-summary-badge rsvp-none">${e.label}</span>`
+        ).join('')
+      : `<span class="rsvp-summary-badge rsvp-no">Absent(e)</span>`;
+    return `
+      <div class="user-item" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <div class="user-name">${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</div>
+        <div style="margin-top:4px">${badges}</div>
+      </div>`;
+  };
+
+  const pendingRow = (r) => `
+    <div class="user-item">
+      <div class="user-info">
+        <div class="user-name">${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</div>
+        <div class="user-meta">Pas encore répondu</div>
+      </div>
+    </div>`;
+
+  const totals = events.map(e => {
+    const n = attending.filter(r => r[e.key]).length;
+    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.88rem">
+      <span>${e.label}</span>${countBadge(n, attending.length)}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:0.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Résumé</div>
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <div style="flex:1;text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
+          <div style="font-size:1.4rem;font-weight:700;color:var(--confirmed)">${attending.length}</div>
+          <div style="font-size:0.75rem;color:var(--muted)">présent(s)</div>
+        </div>
+        <div style="flex:1;text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
+          <div style="font-size:1.4rem;font-weight:700;color:var(--danger)">${absent.length}</div>
+          <div style="font-size:0.75rem;color:var(--muted)">absent(s)</div>
+        </div>
+        <div style="flex:1;text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
+          <div style="font-size:1.4rem;font-weight:700;color:var(--muted)">${pending.length}</div>
+          <div style="font-size:0.75rem;color:var(--muted)">en attente</div>
+        </div>
+      </div>
+      ${totals}
+    </div>
+    ${attending.length ? `<div class="section-title">Présents (${attending.length})</div>${attending.map(guestRow).join('')}` : ''}
+    ${absent.length   ? `<div class="section-title">Absents (${absent.length})</div>${absent.map(guestRow).join('')}` : ''}
+    ${pending.length  ? `<div class="section-title">En attente de réponse (${pending.length})</div>${pending.map(pendingRow).join('')}` : ''}
+  `;
+}
+
 // --- Sous-onglet Lieux ---
 async function refreshAdminLocations() {
   const el = document.getElementById("adminContent");
@@ -1191,6 +1309,99 @@ async function adminDeleteLocation(locId) {
   }
   locations = [];
   await refreshAdminLocations();
+}
+
+// ---------------------------------------------------------------------------
+// PRÉSENCE (RSVP)
+// ---------------------------------------------------------------------------
+async function renderRsvpTab() {
+  app.innerHTML = `<div class="card"><p class="info">Chargement…</p></div>`;
+  const { data, error } = await sb.rpc("get_rsvp", { p_guest_id: guest.id });
+  const r = (!error && data && data.length) ? data[0] : null;
+  _renderRsvpForm(r);
+}
+
+function _renderRsvpForm(r) {
+  const attending = r ? r.attending : null;
+  const ev = (field) => r && r.attending ? r[field] : false;
+
+  app.innerHTML = `
+    <div class="card">
+      <h2>Ma présence au mariage</h2>
+      <p class="info" style="margin-bottom:14px">5 septembre 2026 · Villa 180° Mer, L'Houmeau</p>
+
+      <label style="margin-top:0">Serez-vous présent(e) ?</label>
+      <div class="rsvp-attend-btns">
+        <button id="btnAttendYes" class="btn-secondary${attending === true ? ' selected' : ''}" onclick="setRsvpAttending(true)">✓ Oui, je viens</button>
+        <button id="btnAttendNo"  class="btn-secondary${attending === false ? ' selected' : ''}" onclick="setRsvpAttending(false)">✗ Je ne pourrai pas</button>
+      </div>
+
+      <div id="rsvpDetails" class="${attending ? '' : 'hidden'}">
+        <label style="margin-top:4px">À quels moments serez-vous là ?</label>
+        ${rsvpCheckbox('rsvp_ceremony',       ev('ceremony'),       '💍 Cérémonie civile',   'Mairie de La Rochelle')}
+        ${rsvpCheckbox('rsvp_reception',      ev('reception'),      '🥂 Réception',           'Villa 180° Mer, L\'Houmeau')}
+        ${rsvpCheckbox('rsvp_lunch_next_day', ev('lunch_next_day'), '🍽️ Déjeuner du lendemain', '6 septembre 2026')}
+        ${rsvpCheckbox('rsvp_after_party',    ev('after_party'),    '🎉 After à La Rochelle', 'Soirée du 5 septembre')}
+      </div>
+
+      <button class="btn-primary" id="btnSaveRsvp" style="margin-top:16px" onclick="saveRsvp()">Enregistrer ma réponse</button>
+      <p id="rsvpMsg" class="hidden"></p>
+    </div>`;
+}
+
+function rsvpCheckbox(id, checked, label, sub) {
+  return `
+    <label class="rsvp-option${checked ? ' selected' : ''}" onclick="toggleRsvpOption(this)">
+      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="pointer-events:none" />
+      <div><div class="opt-label">${label}</div><div class="opt-sub">${sub}</div></div>
+    </label>`;
+}
+
+function toggleRsvpOption(el) {
+  const cb = el.querySelector('input[type=checkbox]');
+  cb.checked = !cb.checked;
+  el.classList.toggle('selected', cb.checked);
+}
+
+function setRsvpAttending(val) {
+  document.getElementById('btnAttendYes').classList.toggle('selected', val === true);
+  document.getElementById('btnAttendNo').classList.toggle('selected',  val === false);
+  document.getElementById('rsvpDetails').classList.toggle('hidden', !val);
+}
+
+async function saveRsvp() {
+  const btn = document.getElementById('btnSaveRsvp');
+  const msg = document.getElementById('rsvpMsg');
+  const attending = document.getElementById('btnAttendYes').classList.contains('selected')
+    ? true
+    : document.getElementById('btnAttendNo').classList.contains('selected')
+      ? false
+      : null;
+  if (attending === null) {
+    msg.textContent = 'Veuillez indiquer si vous venez ou non.';
+    msg.className = 'error';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+  const { error } = await sb.rpc('upsert_rsvp', {
+    p_guest_id:       guest.id,
+    p_attending:      attending,
+    p_ceremony:       attending && !!document.getElementById('rsvp_ceremony')?.checked,
+    p_reception:      attending && !!document.getElementById('rsvp_reception')?.checked,
+    p_lunch_next_day: attending && !!document.getElementById('rsvp_lunch_next_day')?.checked,
+    p_after_party:    attending && !!document.getElementById('rsvp_after_party')?.checked,
+  });
+  btn.disabled = false;
+  btn.textContent = 'Enregistrer ma réponse';
+  if (error) {
+    msg.textContent = 'Erreur : ' + error.message;
+    msg.className = 'error';
+  } else {
+    msg.textContent = '✓ Réponse enregistrée !';
+    msg.className = 'info';
+  }
+  msg.classList.remove('hidden');
 }
 
 // ---------------------------------------------------------------------------
