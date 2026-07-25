@@ -982,14 +982,14 @@ async function refreshMyDrivenRides() {
   if (error) { el.innerHTML = `<p class="error">Erreur de chargement.</p>`; return; }
   if (!data || data.length === 0) { el.innerHTML = `<p class="info">Aucun trajet pris en charge pour le moment.</p>`; return; }
   const renderRow = (r) => `
-    <div class="ride-item">
+    <div class="ride-item" id="comment-card-${r.id}" style="transition:background 0.4s,border-left 0.4s">
       <div style="display:flex;justify-content:space-between;align-items:center">
         ${statusBadge(r.status)}
         <span class="meta">${fmtTime(r.ride_time)}</span>
       </div>
       <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
       <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}${r.requester_phone && r.status === "confirmed" ? ` · 📞 ${escapeHtml(r.requester_phone)}` : ""} · ${r.nb_persons} pers.${r.has_luggage ? " · 🧳" : ""}</div>
-      <textarea id="edit-comment-${r.id}" style="min-height:48px;margin-top:8px">${escapeHtml(r.driver_comment || "")}</textarea>
+      <textarea id="edit-comment-${r.id}" style="min-height:48px;margin-top:8px" oninput="document.getElementById('comment-card-${r.id}').style.background='#fffbe6';document.getElementById('comment-card-${r.id}').style.borderLeft='4px solid #f0a500'">${escapeHtml(r.driver_comment || "")}</textarea>
       <button class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour le commentaire</button>
       <button class="btn-danger btn-small" onclick="cancelProposal('${r.id}')">Annuler ma prise en charge</button>
     </div>`;
@@ -999,7 +999,11 @@ async function refreshMyDrivenRides() {
 async function updateComment(rideId) {
   const comment = document.getElementById(`edit-comment-${rideId}`).value.trim();
   const { error } = await sb.rpc("update_driver_comment", { p_driver_id: guest.id, p_ride_id: rideId, p_comment: comment || null });
-  if (!error) await refreshMyDrivenRides();
+  if (!error) {
+    const card = document.getElementById(`comment-card-${rideId}`);
+    if (card) { card.style.background = '#e8f5e9'; card.style.borderLeft = '4px solid #2e7d32'; }
+    setTimeout(() => refreshMyDrivenRides(), 800);
+  }
 }
 
 async function cancelProposal(rideId) {
@@ -1017,7 +1021,7 @@ async function renderProfileTab() {
   const p = profileData && profileData.length ? profileData[0] : {};
 
   app.innerHTML = `
-    <div class="card">
+    <div class="card" id="profileCard" style="transition:background 0.4s,border-left 0.4s">
       <h2>Mes informations</h2>
       <label for="profFirstName">Prénom</label>
       <input id="profFirstName" type="text" value="${escapeHtml(p.first_name || guest.first_name)}" />
@@ -1045,7 +1049,7 @@ async function renderProfileTab() {
       <div class="info hidden" id="profileSuccess"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="pinCard" style="transition:background 0.4s,border-left 0.4s">
       <h2>Changer mon code de connexion</h2>
       <label for="oldPin">Code actuel</label>
       <input id="oldPin" class="pin-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" />
@@ -1099,6 +1103,7 @@ async function renderProfileTab() {
         ? "Cet email est déjà utilisé par un autre compte."
         : "Erreur : " + (error.message || error.code || JSON.stringify(error));
       errEl.classList.remove("hidden");
+      markCardError("profileCard");
       return;
     }
     const updated = data && data.length ? data[0] : {};
@@ -1107,13 +1112,25 @@ async function renderProfileTab() {
     guest.has_vehicle   = updated.has_vehicle   ?? hasVehicle;
     guest.vehicle_seats = updated.vehicle_seats ?? vehicleSeats;
     saveGuest(guest);
-    okEl.textContent = "Informations mises à jour.";
+    markCardSaved("profileCard");
+    okEl.textContent = "✓ Informations mises à jour.";
     okEl.classList.remove("hidden");
     headerSub.textContent = `${guest.first_name} ${guest.last_name}`;
   };
 
-  document.getElementById("profHasVehicle").onchange = (e) =>
+  document.getElementById("profHasVehicle").onchange = (e) => {
     document.getElementById("profSeatsRow").classList.toggle("hidden", !e.target.checked);
+    markCardDirty("profileCard");
+  };
+  ["profFirstName","profLastName","profEmail","profPhone","profSeats"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", () => markCardDirty("profileCard"));
+  });
+
+  ["oldPin","newPin","newPinConfirm"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", () => markCardDirty("pinCard"));
+  });
 
   document.getElementById("btnChangePin").onclick = async () => {
     const oldPin    = document.getElementById("oldPin").value.trim();
@@ -1138,9 +1155,11 @@ async function renderProfileTab() {
         ? "Code actuel incorrect."
         : "Erreur lors du changement de code.";
       errEl.classList.remove("hidden");
+      markCardError("pinCard");
       return;
     }
-    okEl.textContent = "Code de connexion mis à jour.";
+    markCardSaved("pinCard");
+    okEl.textContent = "✓ Code de connexion mis à jour.";
     okEl.classList.remove("hidden");
     document.getElementById("oldPin").value = "";
     document.getElementById("newPin").value = "";
@@ -1772,9 +1791,21 @@ function setRsvpAttending(val) {
   markRsvpDirty();
 }
 
-function markRsvpDirty() {
-  const card = document.getElementById('rsvpCard');
+function markCardDirty(cardId) {
+  const card = document.getElementById(cardId);
   if (card) { card.style.background = '#fffbe6'; card.style.borderLeft = '4px solid #f0a500'; }
+}
+function markCardSaved(cardId) {
+  const card = document.getElementById(cardId);
+  if (card) { card.style.background = '#e8f5e9'; card.style.borderLeft = '4px solid #2e7d32'; }
+}
+function markCardError(cardId) {
+  const card = document.getElementById(cardId);
+  if (card) { card.style.background = ''; card.style.borderLeft = ''; }
+}
+
+function markRsvpDirty() {
+  markCardDirty('rsvpCard');
   const msg = document.getElementById('rsvpMsg');
   if (msg) { msg.classList.add('hidden'); }
 }
@@ -1809,8 +1840,7 @@ async function saveRsvp() {
     msg.className = 'error';
     msg.classList.remove('hidden');
   } else {
-    const card = document.getElementById('rsvpCard');
-    if (card) { card.style.background = '#e8f5e9'; card.style.borderLeft = '4px solid #2e7d32'; }
+    markCardSaved('rsvpCard');
     msg.textContent = '✓ Réponse enregistrée !';
     msg.className = 'info';
     msg.classList.remove('hidden');
