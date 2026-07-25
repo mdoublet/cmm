@@ -232,19 +232,32 @@
     align-items: center;
     gap: 12px;
     padding: 12px 14px;
-    border: 1.5px solid var(--border);
+    border: 2px solid var(--border);
     border-radius: 10px;
     margin-bottom: 8px;
     cursor: pointer;
     background: #fff;
     transition: border-color 0.15s, background 0.15s;
+    user-select: none;
   }
   .rsvp-option.selected {
     border-color: var(--primary);
-    background: #e8f4f7;
+    background: #e0f0f5;
   }
-  .rsvp-option input[type=checkbox], .rsvp-option input[type=radio] {
-    width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--primary);
+  .rsvp-option input[type=checkbox] { display: none; }
+  .rsvp-option .check-icon {
+    width: 22px; height: 22px; flex-shrink: 0;
+    border: 2px solid var(--border);
+    border-radius: 5px;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+    font-size: 14px; color: transparent;
+  }
+  .rsvp-option.selected .check-icon {
+    background: var(--primary);
+    border-color: var(--primary-dark);
+    color: #fff;
   }
   .rsvp-option .opt-label { flex: 1; font-size: 0.93rem; font-weight: 500; }
   .rsvp-option .opt-sub   { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
@@ -603,7 +616,7 @@ async function handleRegister() {
   }
   const g = data[0];
   saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
-  currentTab = g.has_vehicle ? "driver" : "requests";
+  currentTab = "rsvp";
   render();
 }
 
@@ -630,7 +643,7 @@ async function handleSetCode() {
   }
   const g = data[0];
   saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
-  currentTab = g.has_vehicle ? "driver" : "requests";
+  currentTab = "rsvp";
   render();
 }
 
@@ -651,7 +664,8 @@ async function handleVerifyCode() {
   }
   const g = data[0];
   saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
-  currentTab = g.has_vehicle ? "driver" : "requests";
+  const { data: rsvpData } = await sb.rpc("get_rsvp", { p_guest_id: g.guest_id });
+  currentTab = (!rsvpData || rsvpData.length === 0) ? "rsvp" : "profile";
   render();
 }
 
@@ -1371,7 +1385,7 @@ function _renderRsvpForm(r) {
   const ev = (field) => r && r.attending ? r[field] : false;
 
   app.innerHTML = `
-    <div class="card">
+    <div class="card" id="rsvpCard" style="transition:background 0.4s,border-left 0.4s">
       <h2>Ma présence au mariage</h2>
       <p class="info" style="margin-bottom:14px">5 septembre 2026 · Villa 180° Mer, L'Houmeau</p>
 
@@ -1397,7 +1411,8 @@ function _renderRsvpForm(r) {
 function rsvpCheckbox(id, checked, label, sub) {
   return `
     <label class="rsvp-option${checked ? ' selected' : ''}" onclick="toggleRsvpOption(this)">
-      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="pointer-events:none" />
+      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} />
+      <span class="check-icon">✓</span>
       <div><div class="opt-label">${label}</div><div class="opt-sub">${sub}</div></div>
     </label>`;
 }
@@ -1406,6 +1421,7 @@ function toggleRsvpOption(el) {
   const cb = el.querySelector('input[type=checkbox]');
   cb.checked = !cb.checked;
   el.classList.toggle('selected', cb.checked);
+  markRsvpDirty();
 }
 
 function setRsvpAttending(val) {
@@ -1414,6 +1430,14 @@ function setRsvpAttending(val) {
   yes.className = 'btn-secondary' + (val === true  ? ' selected-yes' : '');
   no.className  = 'btn-secondary' + (val === false ? ' selected-no'  : '');
   document.getElementById('rsvpDetails').classList.toggle('hidden', !val);
+  markRsvpDirty();
+}
+
+function markRsvpDirty() {
+  const card = document.getElementById('rsvpCard');
+  if (card) { card.style.background = '#fffbe6'; card.style.borderLeft = '4px solid #f0a500'; }
+  const msg = document.getElementById('rsvpMsg');
+  if (msg) { msg.classList.add('hidden'); }
 }
 
 async function saveRsvp() {
@@ -1444,11 +1468,14 @@ async function saveRsvp() {
   if (error) {
     msg.textContent = 'Erreur : ' + error.message;
     msg.className = 'error';
+    msg.classList.remove('hidden');
   } else {
+    const card = document.getElementById('rsvpCard');
+    if (card) { card.style.background = '#e8f5e9'; card.style.borderLeft = '4px solid #2e7d32'; }
     msg.textContent = '✓ Réponse enregistrée !';
     msg.className = 'info';
+    msg.classList.remove('hidden');
   }
-  msg.classList.remove('hidden');
 }
 
 // ---------------------------------------------------------------------------
