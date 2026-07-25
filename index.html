@@ -345,7 +345,7 @@
 </nav>
 
 <script>
-const APP_VERSION = "v2.6 - 2026-07-25";
+const APP_VERSION = "v2.7 - 2026-07-25";
 const versionBanner = document.getElementById("versionBanner");
 function updateVersionBanner() {
   versionBanner.textContent = (guest && isAdminEmail()) ? "Version " + APP_VERSION : "";
@@ -993,8 +993,8 @@ async function refreshMyDrivenRides() {
       </div>
       <div class="route">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)}</div>
       <div class="meta">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}${r.requester_phone && r.status === "confirmed" ? ` · 📞 ${escapeHtml(r.requester_phone)}` : ""} · ${r.nb_persons} pers.${r.has_luggage ? " · 🧳" : ""}</div>
-      <textarea id="edit-comment-${r.id}" style="min-height:48px;margin-top:8px" oninput="document.getElementById('comment-card-${r.id}').style.background='#fffbe6';document.getElementById('comment-card-${r.id}').style.borderLeft='4px solid #f0a500'">${escapeHtml(r.driver_comment || "")}</textarea>
-      <button class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour le commentaire</button>
+      <textarea id="edit-comment-${r.id}" style="min-height:48px;margin-top:8px" oninput="markCardDirty('comment-card-${r.id}');markBtnDirty('btn-comment-${r.id}')">${escapeHtml(r.driver_comment || "")}</textarea>
+      <button id="btn-comment-${r.id}" class="btn-secondary btn-small" onclick="updateComment('${r.id}')">Mettre à jour le commentaire</button>
       <button class="btn-danger btn-small" onclick="cancelProposal('${r.id}')">Annuler ma prise en charge</button>
     </div>`;
   el.innerHTML = groupByDate(data, renderRow);
@@ -1004,9 +1004,8 @@ async function updateComment(rideId) {
   const comment = document.getElementById(`edit-comment-${rideId}`).value.trim();
   const { error } = await sb.rpc("update_driver_comment", { p_driver_id: guest.id, p_ride_id: rideId, p_comment: comment || null });
   if (!error) {
-    const card = document.getElementById(`comment-card-${rideId}`);
-    if (card) { card.style.background = '#e8f5e9'; card.style.borderLeft = '4px solid #2e7d32'; }
-    setTimeout(() => refreshMyDrivenRides(), 800);
+    markCardSaved(`comment-card-${rideId}`);
+    markBtnSaved(`btn-comment-${rideId}`);
   }
 }
 
@@ -1117,23 +1116,23 @@ async function renderProfileTab() {
     guest.vehicle_seats = updated.vehicle_seats ?? vehicleSeats;
     saveGuest(guest);
     markCardSaved("profileCard");
-    okEl.textContent = "✓ Informations mises à jour.";
-    okEl.classList.remove("hidden");
+    markBtnSaved("btnSaveProfile");
+    okEl.classList.add("hidden");
     headerSub.textContent = `${guest.first_name} ${guest.last_name}`;
   };
 
   document.getElementById("profHasVehicle").onchange = (e) => {
     document.getElementById("profSeatsRow").classList.toggle("hidden", !e.target.checked);
-    markCardDirty("profileCard");
+    markCardDirty("profileCard"); markBtnDirty("btnSaveProfile");
   };
   ["profFirstName","profLastName","profEmail","profPhone","profSeats"].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener("input", () => markCardDirty("profileCard"));
+    if (el) el.addEventListener("input", () => { markCardDirty("profileCard"); markBtnDirty("btnSaveProfile"); });
   });
 
   ["oldPin","newPin","newPinConfirm"].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener("input", () => markCardDirty("pinCard"));
+    if (el) el.addEventListener("input", () => { markCardDirty("pinCard"); markBtnDirty("btnChangePin"); });
   });
 
   document.getElementById("btnChangePin").onclick = async () => {
@@ -1163,8 +1162,8 @@ async function renderProfileTab() {
       return;
     }
     markCardSaved("pinCard");
-    okEl.textContent = "✓ Code de connexion mis à jour.";
-    okEl.classList.remove("hidden");
+    markBtnSaved("btnChangePin");
+    okEl.classList.add("hidden");
     document.getElementById("oldPin").value = "";
     document.getElementById("newPin").value = "";
     document.getElementById("newPinConfirm").value = "";
@@ -1302,17 +1301,24 @@ async function refreshAdminReportRides() {
      </div>`;
 
   const rideRow = (r) => {
-    const statusColors = { pending:'var(--muted)', proposed:'var(--warning,#d97706)', confirmed:'var(--confirmed)', cancelled:'var(--danger)' };
+    const statusColors = { pending:'var(--muted)', proposed:'#d97706', confirmed:'var(--confirmed)', cancelled:'var(--danger)' };
     const statusLabels = { pending:'En attente', proposed:'Proposition faite', confirmed:'Confirmé', cancelled:'Annulé' };
-    const driver = r.driver_first_name ? `${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}` : '—';
+    const driver = r.driver_first_name ? `${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}${r.driver_phone ? ' · 📞 ' + escapeHtml(r.driver_phone) : ''}` : '—';
+    const actions = r.status !== 'cancelled' ? `
+      <div style="display:flex;gap:6px;margin-top:6px">
+        ${r.status !== 'pending' ? `<button class="btn-secondary btn-small" style="font-size:0.72rem;padding:4px 8px;margin:0" onclick="adminReportResetRide('${r.id}')">↩ Remettre en attente</button>` : ''}
+        <button class="btn-danger btn-small" style="font-size:0.72rem;padding:4px 8px;margin:0" onclick="adminReportCancelRide('${r.id}')">✕ Annuler</button>
+      </div>` : '';
     return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.83rem">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-weight:600">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}</span>
         <span style="color:${statusColors[r.status]};font-size:0.75rem;font-weight:600">${statusLabels[r.status]||r.status}</span>
       </div>
       <div style="color:var(--muted);margin-top:2px">${fmtDateLong(r.ride_date)} · ${fmtTime(r.ride_time)}</div>
-      <div style="color:var(--muted)">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)} · ${r.nb_persons} pers.</div>
+      <div style="color:var(--muted)">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)} · ${r.nb_persons} pers.${r.has_luggage ? ' · 🧳' : ''}</div>
       ${r.driver_first_name ? `<div style="color:var(--primary);margin-top:2px">🚗 ${driver}</div>` : ''}
+      ${r.driver_comment ? `<div style="color:var(--muted);font-style:italic;font-size:0.78rem;margin-top:2px">"${escapeHtml(r.driver_comment)}"</div>` : ''}
+      ${actions}
     </div>`;
   };
 
@@ -1342,11 +1348,32 @@ async function refreshAdminReportRides() {
     ${confirmed.length ? `
     <div class="card">
       <div style="font-size:0.78rem;font-weight:600;color:var(--confirmed);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
-        Confirmés (${confirmed.length})
+        ✓ Confirmés (${confirmed.length})
       </div>
       ${confirmed.map(rideRow).join('')}
     </div>` : ''}
+    ${cancelled.length ? `
+    <div class="card">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--danger);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
+        Annulés (${cancelled.length})
+      </div>
+      ${cancelled.map(rideRow).join('')}
+    </div>` : ''}
   `;
+}
+
+async function adminReportCancelRide(rideId) {
+  if (!confirm("Annuler ce trajet ?")) return;
+  const { error } = await sb.rpc("admin_cancel_ride", { p_admin_id: guest.id, p_ride_id: rideId });
+  if (!error) await refreshAdminReportRides();
+  else alert("Erreur : " + error.message);
+}
+
+async function adminReportResetRide(rideId) {
+  if (!confirm("Remettre ce trajet en attente sans chauffeur ?")) return;
+  const { error } = await sb.rpc("admin_reset_ride", { p_admin_id: guest.id, p_ride_id: rideId });
+  if (!error) await refreshAdminReportRides();
+  else alert("Erreur : " + error.message);
 }
 
 // ---------------------------------------------------------------------------
@@ -1806,9 +1833,27 @@ function markCardError(cardId) {
   const card = document.getElementById(cardId);
   if (card) { card.style.background = ''; card.style.borderLeft = ''; }
 }
+function markBtnSaved(btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.dataset.origLabel = btn.dataset.origLabel || btn.textContent;
+  btn.textContent = '✓ Enregistré !';
+  btn.style.background = '#2e7d32';
+  btn.style.borderColor = '#2e7d32';
+  btn.style.color = '#fff';
+}
+function markBtnDirty(btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (btn.dataset.origLabel) btn.textContent = btn.dataset.origLabel;
+  btn.style.background = '';
+  btn.style.borderColor = '';
+  btn.style.color = '';
+}
 
 function markRsvpDirty() {
   markCardDirty('rsvpCard');
+  markBtnDirty('btnSaveRsvp');
   const msg = document.getElementById('rsvpMsg');
   if (msg) { msg.classList.add('hidden'); }
 }
@@ -1837,16 +1882,15 @@ async function saveRsvp() {
     p_after_party:    attending && !!document.getElementById('rsvp_after_party')?.checked,
   });
   btn.disabled = false;
-  btn.textContent = 'Enregistrer ma réponse';
   if (error) {
+    btn.textContent = 'Enregistrer ma réponse';
     msg.textContent = 'Erreur : ' + error.message;
     msg.className = 'error';
     msg.classList.remove('hidden');
   } else {
     markCardSaved('rsvpCard');
-    msg.textContent = '✓ Réponse enregistrée !';
-    msg.className = 'info';
-    msg.classList.remove('hidden');
+    markBtnSaved('btnSaveRsvp');
+    msg.classList.add('hidden');
   }
 }
 
