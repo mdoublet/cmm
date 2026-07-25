@@ -346,7 +346,10 @@
 
 <script>
 const APP_VERSION = "v2.6 - 2026-07-25";
-document.getElementById("versionBanner").textContent = "Version " + APP_VERSION;
+const versionBanner = document.getElementById("versionBanner");
+function updateVersionBanner() {
+  versionBanner.textContent = (guest && isAdminEmail()) ? "Version " + APP_VERSION : "";
+}
 
 const SUPABASE_URL = "https://ktpiwlcazmodfezrwlqf.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0cGl3bGNhem1vZGZlenJ3bHFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTMwMzcsImV4cCI6MjA5MzU2OTAzN30.FGzUyYVyPFJW1y8Rxw6lN5uUDlrIY7XbJfbIiuYuMP0";
@@ -474,6 +477,7 @@ async function render() {
   }
   tabbar.classList.remove("hidden");
   headerSub.textContent = `${guest.first_name} ${guest.last_name}`;
+  updateVersionBanner();
   tabRsvp.classList.toggle("active",        currentTab === "rsvp");
   tabRequests.classList.toggle("active",    currentTab === "requests");
   tabInfo.classList.toggle("active",        currentTab === "info");
