@@ -320,6 +320,7 @@
   <button id="tabRsvp"><span class="tab-icon">✉️</span>Présence</button>
   <button id="tabRequests"><span class="tab-icon">🚗</span>Covoiturage</button>
   <button id="tabProfile" class="active"><span class="tab-icon">👤</span>Profil</button>
+  <button id="tabAdminReport" class="hidden"><span class="tab-icon">📊</span>Admin</button>
 </nav>
 
 <script>
@@ -333,7 +334,11 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const STORAGE_KEY = "covoit_guest";
 let guest = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 let locations = [];
+const ADMIN_EMAILS = ["carolinehuyghe@gmail.com", "mdoublet@gmail.com"];
+function isAdminEmail() { return guest && ADMIN_EMAILS.includes((guest.email || "").toLowerCase()); }
+
 let adminSubTab = "rides"; // "rides" | "users" | "locations" | "rsvp"
+let adminReportSubTab = "rsvp"; // "rsvp" | "rides"
 let currentTab = "profile";
 let showNewRideForm = false;
 let ridesSubTab = "requests"; // "requests" | "accepted"
@@ -341,9 +346,10 @@ let ridesSubTab = "requests"; // "requests" | "accepted"
 const app = document.getElementById("app");
 const headerSub = document.getElementById("headerSub");
 const tabbar = document.getElementById("tabbar");
-const tabRequests = document.getElementById("tabRequests");
-const tabRsvp    = document.getElementById("tabRsvp");
-const tabProfile = document.getElementById("tabProfile");
+const tabRequests    = document.getElementById("tabRequests");
+const tabRsvp        = document.getElementById("tabRsvp");
+const tabProfile     = document.getElementById("tabProfile");
+const tabAdminReport = document.getElementById("tabAdminReport");
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
@@ -365,9 +371,10 @@ function logout() {
   render();
 }
 
-tabRequests.onclick = () => { currentTab = "requests"; showNewRideForm = false; render(); };
-tabRsvp.onclick    = () => { currentTab = "rsvp"; render(); };
-tabProfile.onclick = () => { currentTab = "profile"; render(); };
+tabRequests.onclick    = () => { currentTab = "requests"; showNewRideForm = false; render(); };
+tabRsvp.onclick        = () => { currentTab = "rsvp"; render(); };
+tabProfile.onclick     = () => { currentTab = "profile"; render(); };
+tabAdminReport.onclick = () => { currentTab = "adminReport"; adminReportSubTab = "rsvp"; render(); };
 
 async function loadLocations() {
   if (locations.length) return locations;
@@ -440,9 +447,11 @@ async function render() {
   }
   tabbar.classList.remove("hidden");
   headerSub.textContent = `${guest.first_name} ${guest.last_name}`;
-  tabRsvp.classList.toggle("active",     currentTab === "rsvp");
-  tabRequests.classList.toggle("active", currentTab === "requests");
-  tabProfile.classList.toggle("active",  currentTab === "profile");
+  tabRsvp.classList.toggle("active",        currentTab === "rsvp");
+  tabRequests.classList.toggle("active",    currentTab === "requests");
+  tabProfile.classList.toggle("active",     currentTab === "profile");
+  tabAdminReport.classList.toggle("active", currentTab === "adminReport");
+  tabAdminReport.classList.toggle("hidden", !isAdminEmail());
 
   await loadLocations();
 
@@ -450,6 +459,8 @@ async function render() {
     await renderRsvpTab();
   } else if (currentTab === "profile") {
     await renderProfileTab();
+  } else if (currentTab === "adminReport") {
+    await renderAdminReportTab();
   } else {
     await renderRidesTab();
   }
@@ -619,7 +630,7 @@ async function handleRegister() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, email: email.toLowerCase(), has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
   currentTab = "rsvp";
   render();
 }
@@ -646,7 +657,7 @@ async function handleSetCode() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, email: pendingIdentifier.toLowerCase(), has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
   currentTab = "rsvp";
   render();
 }
@@ -667,7 +678,7 @@ async function handleVerifyCode() {
     return;
   }
   const g = data[0];
-  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
+  saveGuest({ id: g.guest_id, first_name: g.first_name, last_name: g.last_name, email: pendingIdentifier.toLowerCase(), has_vehicle: g.has_vehicle, vehicle_seats: g.vehicle_seats ?? null, is_admin: g.is_admin });
   const { data: rsvpData } = await sb.rpc("get_rsvp", { p_guest_id: g.guest_id });
   currentTab = (!rsvpData || rsvpData.length === 0) ? "rsvp" : "profile";
   render();
@@ -1112,6 +1123,174 @@ async function renderProfileTab() {
 // ---------------------------------------------------------------------------
 // ADMINISTRATION
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// ADMIN REPORT — onglet mariés (présences + bilan covoiturage)
+// ---------------------------------------------------------------------------
+async function renderAdminReportTab() {
+  if (!isAdminEmail()) { app.innerHTML = `<div class="card"><p class="error">Accès non autorisé.</p></div>`; return; }
+
+  app.innerHTML = `
+    <div class="card" style="padding-bottom:4px">
+      <h2>📊 Tableau de bord mariés</h2>
+      <div class="subtabbar" style="margin-top:8px">
+        <button id="arTabRsvp"  onclick="setAdminReportSubTab('rsvp')"  class="${adminReportSubTab==='rsvp'?'active':''}">✉️ Présences</button>
+        <button id="arTabRides" onclick="setAdminReportSubTab('rides')" class="${adminReportSubTab==='rides'?'active':''}">🚗 Covoiturage</button>
+      </div>
+    </div>
+    <div id="adminReportContent"><p class="info">Chargement…</p></div>
+  `;
+  await refreshAdminReportContent();
+}
+
+async function setAdminReportSubTab(tab) {
+  adminReportSubTab = tab;
+  document.querySelectorAll('#arTabRsvp,#arTabRides').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById('arTab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  if (el) el.classList.add('active');
+  await refreshAdminReportContent();
+}
+
+async function refreshAdminReportContent() {
+  if (adminReportSubTab === 'rsvp')  await refreshAdminReportRsvp();
+  else                               await refreshAdminReportRides();
+}
+
+async function refreshAdminReportRsvp() {
+  const el = document.getElementById('adminReportContent');
+  if (!el) return;
+  el.innerHTML = '<p class="info">Chargement…</p>';
+  const { data, error } = await sb.rpc('list_all_rsvp_admin', { p_admin_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur : ${error.message}</p>`; return; }
+
+  const all      = data || [];
+  const answered = all.filter(r => r.has_answered);
+  const attending= answered.filter(r => r.attending);
+  const absent   = answered.filter(r => !r.attending);
+  const pending  = all.filter(r => !r.has_answered);
+
+  const events = [
+    { key: 'ceremony',       emoji: '💍', label: 'Cérémonie civile' },
+    { key: 'reception',      emoji: '🥂', label: 'Réception' },
+    { key: 'lunch_next_day', emoji: '🍽️', label: 'Déjeuner lendemain' },
+    { key: 'after_party',    emoji: '🎉', label: 'After La Rochelle' },
+  ];
+
+  const statBox = (val, label, color) =>
+    `<div style="flex:1;text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
+       <div style="font-size:1.6rem;font-weight:700;color:${color}">${val}</div>
+       <div style="font-size:0.73rem;color:var(--muted)">${label}</div>
+     </div>`;
+
+  const eventRows = events.map(e => {
+    const n = attending.filter(r => r[e.key]).length;
+    const pct = attending.length ? Math.round(n / attending.length * 100) : 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:1.1rem">${e.emoji}</span>
+      <span style="flex:1;font-size:0.88rem">${e.label}</span>
+      <span style="font-size:0.88rem;font-weight:600;color:var(--primary)">${n}</span>
+      <span style="font-size:0.75rem;color:var(--muted);width:36px;text-align:right">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  const guestChip = (r) => {
+    const evBadges = r.attending
+      ? events.filter(e => r[e.key]).map(e => `<span class="rsvp-summary-badge rsvp-ok" style="font-size:0.7rem">${e.emoji}</span>`).join('')
+      : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.85rem">
+      <span style="flex:1">${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</span>
+      <span>${evBadges}</span>
+    </div>`;
+  };
+
+  const pendingChip = (r) =>
+    `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:0.85rem;color:var(--muted)">
+       ${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}
+     </div>`;
+
+  el.innerHTML = `
+    <div class="card">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Résumé des réponses</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        ${statBox(attending.length, 'présent(s)', 'var(--confirmed)')}
+        ${statBox(absent.length, 'absent(s)', 'var(--danger)')}
+        ${statBox(pending.length, 'en attente', 'var(--muted)')}
+      </div>
+      <div style="font-size:0.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Décompte par moment</div>
+      ${eventRows}
+    </div>
+    ${attending.length ? `<div class="card"><div class="section-title" style="margin-top:0">Présents (${attending.length})</div>${attending.map(guestChip).join('')}</div>` : ''}
+    ${absent.length    ? `<div class="card"><div class="section-title" style="margin-top:0">Absents (${absent.length})</div>${absent.map(guestChip).join('')}</div>` : ''}
+    ${pending.length   ? `<div class="card"><div class="section-title" style="margin-top:0">Pas encore répondu (${pending.length})</div>${pending.map(pendingChip).join('')}</div>` : ''}
+  `;
+}
+
+async function refreshAdminReportRides() {
+  const el = document.getElementById('adminReportContent');
+  if (!el) return;
+  el.innerHTML = '<p class="info">Chargement…</p>';
+  const { data, error } = await sb.rpc('list_all_rides_admin', { p_admin_id: guest.id });
+  if (error) { el.innerHTML = `<p class="error">Erreur : ${error.message}</p>`; return; }
+
+  const rides = data || [];
+  const pending   = rides.filter(r => r.status === 'pending');
+  const proposed  = rides.filter(r => r.status === 'proposed');
+  const confirmed = rides.filter(r => r.status === 'confirmed');
+  const cancelled = rides.filter(r => r.status === 'cancelled');
+
+  const statBox = (val, label, color) =>
+    `<div style="flex:1;text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
+       <div style="font-size:1.6rem;font-weight:700;color:${color}">${val}</div>
+       <div style="font-size:0.73rem;color:var(--muted)">${label}</div>
+     </div>`;
+
+  const rideRow = (r) => {
+    const statusColors = { pending:'var(--muted)', proposed:'var(--warning,#d97706)', confirmed:'var(--confirmed)', cancelled:'var(--danger)' };
+    const statusLabels = { pending:'En attente', proposed:'Proposition faite', confirmed:'Confirmé', cancelled:'Annulé' };
+    const driver = r.driver_first_name ? `${escapeHtml(r.driver_first_name)} ${escapeHtml(r.driver_last_name)}` : '—';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.83rem">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:600">${escapeHtml(r.requester_first_name)} ${escapeHtml(r.requester_last_name)}</span>
+        <span style="color:${statusColors[r.status]};font-size:0.75rem;font-weight:600">${statusLabels[r.status]||r.status}</span>
+      </div>
+      <div style="color:var(--muted);margin-top:2px">${fmtDateLong(r.ride_date)} · ${fmtTime(r.ride_time)}</div>
+      <div style="color:var(--muted)">${escapeHtml(r.departure_name)} → ${escapeHtml(r.arrival_name)} · ${r.nb_persons} pers.</div>
+      ${r.driver_first_name ? `<div style="color:var(--primary);margin-top:2px">🚗 ${driver}</div>` : ''}
+    </div>`;
+  };
+
+  el.innerHTML = `
+    <div class="card">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">État global du covoiturage</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:0">
+        ${statBox(pending.length,   'en attente', 'var(--muted)')}
+        ${statBox(proposed.length,  'en cours', 'var(--primary)')}
+        ${statBox(confirmed.length, 'confirmés', 'var(--confirmed)')}
+      </div>
+    </div>
+    ${pending.length ? `
+    <div class="card">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--danger);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
+        ⚠️ Demandes sans chauffeur (${pending.length})
+      </div>
+      ${pending.map(rideRow).join('')}
+    </div>` : `<div class="card" style="text-align:center;color:var(--confirmed)">✓ Aucune demande en souffrance</div>`}
+    ${proposed.length ? `
+    <div class="card">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
+        En cours de confirmation (${proposed.length})
+      </div>
+      ${proposed.map(rideRow).join('')}
+    </div>` : ''}
+    ${confirmed.length ? `
+    <div class="card">
+      <div style="font-size:0.78rem;font-weight:600;color:var(--confirmed);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
+        Confirmés (${confirmed.length})
+      </div>
+      ${confirmed.map(rideRow).join('')}
+    </div>` : ''}
+  `;
+}
+
 // ---------------------------------------------------------------------------
 // ADMIN — structure avec 3 sous-onglets
 // ---------------------------------------------------------------------------
