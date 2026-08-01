@@ -357,6 +357,7 @@ function logout() {
   clearSession(); currentTeam=null; currentPlayer=null;
   realtimeSubs.forEach(s=>{ try{s.unsubscribe();}catch(e){} }); realtimeSubs=[];
   if (pollInterval) { clearInterval(pollInterval); pollInterval=null; }
+  _lastPhotoSig=null; for(const k in _photoStatusMap) delete _photoStatusMap[k];
   stopTimer();
   document.getElementById('teamApp').style.display='none';
   document.getElementById('timerBand').style.display='none';
@@ -1376,6 +1377,8 @@ async function loadPhotoThumb(photoId, imgElId) {
 }
 
 let _lastSyncPhotos = 0;
+let _lastPhotoSig = null;   // signature des photos de l'équipe (détecte validation/refus admin sans realtime)
+const _photoStatusMap = {}; // id photo -> dernier statut connu (pour notifier le joueur)
 async function syncPhotosFromDB(epreuve) {
   if (!isCaptain) return;
   if (gameState?.status !== 'active') return;
@@ -2266,6 +2269,24 @@ function subscribeRealtime() {
           }
         }
       }
+
+      // --- Fallback : détecter validation/refus de photos par l'admin même sans realtime ---
+      try {
+        const {data:phs} = await db.from('photos').select('id,statut,points').eq('equipe_nom', currentTeam);
+        const sig = JSON.stringify((phs||[]).map(p=>[p.id,p.statut,p.points]));
+        if (_lastPhotoSig !== null && sig !== _lastPhotoSig) {
+          (phs||[]).forEach(p => {
+            if (_photoStatusMap[p.id] === 'en_attente' && p.statut !== 'en_attente') {
+              if (p.statut === 'validee') showToast({icon:'✅',title:`Photo validée — +${p.points||0} pts`,type:'success'});
+              else if (p.statut === 'refusee') showToast({icon:'❌',title:'Photo refusée',msg:'Tu peux soumettre un nouvel essai.'});
+            }
+          });
+          _lastSyncPhotos = 0; // forcer le re-sync depuis la table photos
+          changed = true;
+        }
+        (phs||[]).forEach(p => { _photoStatusMap[p.id] = p.statut; });
+        _lastPhotoSig = sig;
+      } catch(e) {}
 
       (capRes.data||[]).forEach(r => {
         const team = r.key.replace('jdp_capitaine_','');
