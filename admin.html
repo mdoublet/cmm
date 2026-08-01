@@ -2996,20 +2996,30 @@ async function confirmPurge(){
   showToast({icon:'🗑',title:'Archives supprimées',msg:'Toutes les archives ont été effacées.',type:'danger',duration:4000});
   renderAdminArchive();
 }
+// Archive toutes les photos courantes dans photos_archive, par lots (évite de dépasser
+// la taille max d'une requête sur de gros volumes base64). Retourne true si tout a réussi.
+async function archiveCurrentPhotos(label, now){
+  const {data:photos}=await db.from('photos').select('*');
+  if(!photos?.length) return true;
+  const rows=photos.map(p=>({
+    original_id:p.id,equipe_nom:p.equipe_nom,epreuve_id:p.epreuve_id,
+    challenge_num:p.challenge_num||1,attempt_num:p.attempt_num||1,
+    data:p.data,statut:p.statut,points:p.points||0,
+    created_at:p.created_at,archived_at:now,archive_label:label
+  }));
+  let ok=true;
+  for(let i=0;i<rows.length;i+=5){
+    const {error}=await db.from('photos_archive').insert(rows.slice(i,i+5));
+    if(error){ ok=false; console.error('Archive photos échec:',error); }
+  }
+  return ok;
+}
 async function confirmReset(){
   const label=document.getElementById('archiveLabel').value||`Reset du ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
   const now=new Date().toISOString();
 
-  // 1. Archive photos
-  const {data:photos}=await db.from('photos').select('*');
-  if(photos?.length){
-    await db.from('photos_archive').insert(photos.map(p=>({
-      original_id:p.id,equipe_nom:p.equipe_nom,epreuve_id:p.epreuve_id,
-      challenge_num:p.challenge_num||1,attempt_num:p.attempt_num||1,
-      data:p.data,statut:p.statut,points:p.points||0,
-      created_at:p.created_at,archived_at:now,archive_label:label
-    })));
-  }
+  // 1. Archive photos (par lots + garde-fou avant suppression plus bas)
+  const photosArchived = await archiveCurrentPhotos(label, now);
 
   // 2. Archive petit bac responses
   const {data:pbRep}=await db.from('petit_bac_reponses').select('*');
@@ -3045,9 +3055,10 @@ async function confirmReset(){
     .update({archive_label:label, archived_at:now})
     .eq('archive_label','__live__');
 
-  // 5. Delete live data
+  // 5. Delete live data — mais NE PAS supprimer les photos si l'archivage a échoué
   await db.from('scores').delete().neq('id',0);
-  await db.from('photos').delete().neq('id',0);
+  if(photosArchived) await db.from('photos').delete().neq('id',0);
+  else showToast({icon:'⚠️',title:'Photos NON supprimées',msg:"L'archivage des photos a échoué — elles sont conservées pour ne rien perdre.",type:'danger',duration:8000});
   await db.from('petit_bac_reponses').delete().neq('id',0);
 
   // 6. Réinitialiser complètement le jeu de piste (états des équipes + état du jeu)
@@ -4080,13 +4091,19 @@ async function jdpResetGame(){
   jdpData.teamStates={};
   await db.from('jp_game_state').upsert({id:1,status:'waiting',started_at:null},{onConflict:'id'});
   await db.from('jp_team_states').delete().neq('equipe_nom','__none__');
+  // Archiver les photos AVANT de les supprimer (sinon les dernières photos sont perdues
+  // et n'apparaissent jamais dans les archives).
+  const nowJdp=new Date().toISOString();
+  const labelJdp='Jeu de piste réinitialisé du '+new Date().toLocaleDateString('fr-FR')+' à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const okArchive=await archiveCurrentPhotos(labelJdp, nowJdp);
   // Supprimer les photos du jeu précédent pour éviter tout reliquat (sinon le joueur
-  // voit des photos « refusées » dès le début de l'épreuve photo).
-  await db.from('photos').delete().neq('id',0);
+  // voit des photos « refusées » dès le début de l'épreuve photo) — seulement si archivées.
+  if(okArchive) await db.from('photos').delete().neq('id',0);
+  else showToast({icon:'⚠️',title:'Photos conservées',msg:"L'archivage a échoué — les photos ne sont pas supprimées pour éviter toute perte.",type:'danger',duration:8000});
   appData.teams.forEach(t=>{ challengeState[t]={1:{attempts:[],done:false,points:0},2:{attempts:[],done:false,points:0}}; });
   pendingPhotoCount=0;_lastPendingSeen=0;updateAdminPhotoBadge();
   renderJdpControle();
-  showToast({icon:'🔄',title:'Jeu de piste réinitialisé',msg:'États et photos remis à zéro.',duration:3000});
+  showToast({icon:'🔄',title:'Jeu de piste réinitialisé',msg:okArchive?'Photos archivées puis remises à zéro.':'États remis à zéro.',duration:3000});
 }
 
 // ---- Suivi & scores (fusionnés) ----
